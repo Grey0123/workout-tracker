@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0B1B33">
+<meta name="color-scheme" content="light">
+<title>WorkoutTracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="site-head">
+  <header>
+    <div class="brand">
+      <h1>Workout<span>Tracker</span></h1>
+      <span class="role-tag">My log</span>
+    </div>
+    <nav aria-label="Main">
+      <button id="tab-dashboard" class="active" onclick="go('dashboard')">Home</button>
+      <button id="tab-calendar" onclick="go('calendar')">Calendar</button>
+      <button id="tab-progress" onclick="go('progress')">Progress</button>
+    </nav>
+  </header>
+</div>
+
+<main>
+  <div id="setup-warn-slot"></div>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <section class="view active" id="view-dashboard">
+    <div class="card today-bar">
+      <div class="grow">
+        <div class="date" id="dash-today"></div>
+        <div class="top" style="margin-top:8px">
+          <span class="pill" id="dash-workout-pill">…</span>
+          <span class="pill" id="dash-meal-pill">…</span>
+        </div>
+      </div>
+      <button class="btn" onclick="openDay(todayKey(), 'workout')">Log today</button>
+    </div>
+
+    <h2 class="section">This week</h2>
+    <div class="stats">
+      <div class="card stat"><div class="num" id="st-workouts">–</div><div class="lbl">Workouts</div></div>
+      <div class="card stat"><div class="num" id="st-sets">–</div><div class="lbl">Total sets</div></div>
+      <div class="card stat"><div class="num" id="st-volume">–</div><div class="lbl">Volume lifted</div></div>
+      <div class="card stat"><div class="num" id="st-month">–</div><div class="lbl">This month</div></div>
+    </div>
+
+    <h2 class="section">Recent sessions</h2>
+    <div class="sessions" id="recent-sessions">
+      <div class="card loading">Loading…</div>
+    </div>
+  </section>
+
+  <!-- ==================== CALENDAR (workout + food live here) ============ -->
+  <section class="view" id="view-calendar">
+    <div class="cal-layout">
+      <div class="card cal-card">
+        <div class="cal-head">
+          <div class="month" id="cal-month"></div>
+          <button class="today-btn" onclick="calToday(renderCal)">Today</button>
+          <button class="nav-btn" onclick="calShift(-1, renderCal)" aria-label="Previous month">‹</button>
+          <button class="nav-btn" onclick="calShift(1, renderCal)" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span><span class="key trained"></span>gym day</span>
+          <span><span class="key"></span>sets done</span>
+          <span><span class="key food"></span>meals logged</span>
+        </div>
+      </div>
+
+      <div class="card day-panel" id="day-panel">
+        <h3><span id="dp-date"></span><span class="sub" id="dp-summary"></span></h3>
+
+        <div class="day-toggle" role="tablist" aria-label="Day contents">
+          <button id="dtab-workout" class="active" role="tab" onclick="showPane('workout')">
+            Workout<span class="count" id="dcount-workout">0</span>
+          </button>
+          <button id="dtab-food" role="tab" onclick="showPane('food')">
+            Food<span class="count" id="dcount-food">0</span>
+          </button>
+        </div>
+
+        <!-- ---------- workout pane ---------- -->
+        <div class="day-pane active" id="pane-workout">
+          <div class="entries" id="dp-activities"></div>
+
+          <div class="form-wrap">
+            <div id="edit-banner"></div>
+            <div class="form-title" id="w-form-title">Add an exercise</div>
+
+            <div class="ffield">
+              <label for="f-exercise">Exercise</label>
+              <input id="f-exercise" list="exercise-list" placeholder="Bench Press" autocomplete="off">
+              <datalist id="exercise-list">
+                <option>Bench Press</option><option>Squat</option><option>Deadlift</option>
+                <option>Overhead Press</option><option>Barbell Row</option><option>Pull Up</option>
+                <option>Lat Pulldown</option><option>Bicep Curl</option><option>Tricep Pushdown</option>
+                <option>Leg Press</option><option>Romanian Deadlift</option><option>Lateral Raise</option>
+                <option>Incline Dumbbell Press</option><option>Calf Raise</option>
+              </datalist>
+            </div>
+
+            <div class="ffield">
+              <label for="f-variant">Variant <span class="opt">(optional)</span></label>
+              <input id="f-variant" placeholder="Incline / Dumbbell / Close grip…" autocomplete="off">
+            </div>
+
+            <label>Sets</label>
+            <div class="set-builder" id="set-builder"></div>
+            <button type="button" class="sb-add" onclick="addSetRowSmart()">+ Add set</button>
+            <div class="sb-hint">Each set keeps its own weight, so a ramp-up like 60 / 65 / 70 kg is recorded exactly.</div>
+
+            <div class="ffield" style="margin-top:12px">
+              <label for="f-notes">Notes <span class="opt">(optional)</span></label>
+              <textarea id="f-notes" placeholder="Felt heavy, last set to failure…"></textarea>
+            </div>
+
+            <button class="save-btn" id="btn-save" onclick="saveWorkout()">Save exercise</button>
+            <div class="status" id="w-status" role="status"></div>
+          </div>
+        </div>
+
+        <!-- ---------- food pane ---------- -->
+        <div class="day-pane" id="pane-food">
+          <div class="meal-group" id="dp-meals"></div>
+
+          <div class="form-wrap">
+            <div class="form-title" id="m-form-title">Log a meal</div>
+
+            <label>Meal</label>
+            <div class="seg" role="group" aria-label="Meal time">
+              <button type="button" id="slot-morning" class="active" onclick="pickSlot('morning')">Morning</button>
+              <button type="button" id="slot-afternoon" onclick="pickSlot('afternoon')">Afternoon</button>
+              <button type="button" id="slot-evening" onclick="pickSlot('evening')">Evening</button>
+            </div>
+
+            <div class="ffield">
+              <label for="m-food">What did you eat?</label>
+              <textarea id="m-food" placeholder="Oats, 3 eggs, black coffee…"></textarea>
+            </div>
+
+            <div class="ffield">
+              <label for="m-notes">Notes <span class="opt">(optional)</span></label>
+              <input id="m-notes" placeholder="Post-workout / ate out / rough estimate…">
+            </div>
+
+            <label>Photo <span class="opt">(optional)</span></label>
+            <div class="photo-pick">
+              <img id="m-preview" class="photo-preview" hidden alt="Selected meal photo">
+              <input type="file" id="m-photo" accept="image/*" onchange="photoChosen(event)">
+              <button type="button" class="btn ghost block" onclick="document.getElementById('m-photo').click()">
+                <span id="m-photo-label">Choose photo</span>
+              </button>
+              <button type="button" class="btn ghost block" id="m-photo-clear" hidden
+                      style="margin-top:8px" onclick="clearPhoto()">Remove photo</button>
+              <div class="hint">Saved to your Google Drive folder. Resized before upload.</div>
+            </div>
+
+            <button class="save-btn" id="btn-save-meal" onclick="saveMeal()">Save meal</button>
+            <div class="status" id="m-status" role="status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PROGRESS ==================== -->
+  <section class="view" id="view-progress">
+    <div class="card pg-controls">
+      <div class="grow">
+        <label for="pg-exercise">Exercise</label>
+        <select id="pg-exercise" onchange="renderProgress()"></select>
+      </div>
+      <div class="fixed">
+        <label for="pg-metric">Metric</label>
+        <select id="pg-metric" onchange="renderProgress()">
+          <option value="top">Top weight (kg)</option>
+          <option value="e1rm">Est. 1RM (kg)</option>
+          <option value="volume">Session volume (kg)</option>
+        </select>
+      </div>
+    </div>
+    <div class="stats" id="pg-stats"></div>
+    <h2 class="section">Trend</h2>
+    <div class="card pg-chart-card"><div id="pg-chart"></div></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+<script>
+const VIEWS = ["dashboard", "calendar", "progress"];
+let dayPane = "workout";     // which half of the day panel is showing
+let mealSlot = "morning";
+let editingId = "";          // set while editing an existing activity
+let photoData = "";
+let photoName = "";
+
+function go(name) {
+  showView(name, VIEWS);
+  if (name === "progress") renderProgress();
+}
+
+/* ---------- dashboard ---------- */
+function renderDashboard() {
+  $("dash-today").textContent =
+    niceDate(todayKey(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  const rows = workoutsOn(todayKey());
+  const wp = $("dash-workout-pill");
+  if (rows.length) {
+    wp.textContent = `✓ ${rows.length} exercise${rows.length > 1 ? "s" : ""} · ${setsOf(rows)} sets`;
+    wp.className = "pill done";
+  } else {
+    wp.textContent = "no workout yet today";
+    wp.className = "pill";
+  }
+
+  const mc = mealCount(todayKey());
+  const mp = $("dash-meal-pill");
+  mp.textContent = mc ? `✓ ${mc} of 3 meals logged` : "no meals logged today";
+  mp.className = mc ? "pill blue" : "pill";
+
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weekKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    weekKeys.push(keyOf(d));
+  }
+  const weekRows = weekKeys.flatMap(k => workoutsOn(k));
+  const mk = todayKey().slice(0, 7);
+
+  $("st-workouts").textContent = weekKeys.filter(k => workoutsOn(k).length).length;
+  $("st-sets").textContent = setsOf(weekRows);
+  $("st-volume").innerHTML = `${Math.round(volumeOf(weekRows)).toLocaleString()}<small> kg</small>`;
+  $("st-month").textContent = trainedDays().filter(k => k.startsWith(mk)).length;
+
+  const wrap = $("recent-sessions");
+  const days = trainedDays().reverse().slice(0, 6);
+  if (!days.length) {
+    wrap.innerHTML = `<div class="card no-entries">No sessions yet — tap a day in the calendar to log your first workout.</div>`;
+    return;
+  }
+  wrap.innerHTML = days.map(k => {
+    const rs = workoutsOn(k);
+    const chips = rs.map(r => {
+      const list = normaliseSets(r);
+      return `<span class="chip">${esc(r.exercise)} <small>${esc(setsSummary(list))}${
+        weightSummary(list) ? " · " + esc(weightSummary(list)) : ""}</small></span>`;
+    }).join("");
+    const mc2 = mealCount(k);
+    return `
+      <button class="card session" onclick="openDay('${k}')">
+        <span class="when">${monShort(k)}<b>${dayNum(k)}</b>${dowShort(k)}</span>
+        <span class="what">
+          <span class="chips">${chips}${mc2 ? `<span class="chip meal">${mc2} meal${mc2 > 1 ? "s" : ""}</span>` : ""}</span>
+          <div class="meta">${setsOf(rs)} sets · ${Math.round(volumeOf(rs)).toLocaleString()} kg volume</div>
+        </span>
+      </button>`;
+  }).join("");
+}
+
+/* ---------- calendar + day panel ---------- */
+function renderCal() {
+  renderCalendarInto("cal-grid", "cal-month", (k) => {
+    selectedDay = k;
+    cancelEdit();          // don't carry an in-progress edit across days
+    renderCal();
+    $("day-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  renderDayPanel();
+}
+
+function showPane(name) {
+  dayPane = name;
+  $("dtab-workout").classList.toggle("active", name === "workout");
+  $("dtab-food").classList.toggle("active", name === "food");
+  $("pane-workout").classList.toggle("active", name === "workout");
+  $("pane-food").classList.toggle("active", name === "food");
+  if (name === "food") prefillMeal();
+}
+
+function renderDayPanel() {
+  const rows = workoutsOn(selectedDay);
+  const mc = mealCount(selectedDay);
+
+  $("dp-date").textContent = niceDate(selectedDay);
+  const bits = [];
+  if (rows.length) bits.push(`${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg`);
+  if (mc) bits.push(`${mc} meal${mc > 1 ? "s" : ""}`);
+  $("dp-summary").textContent = bits.join(" · ") || "nothing logged yet";
+
+  $("dcount-workout").textContent = rows.length;
+  $("dcount-food").textContent = mc;
+
+  $("dp-activities").innerHTML = activitiesHtml(rows, true);
+  $("dp-meals").innerHTML = mealsHtml(selectedDay, true);
+}
+
+function openDay(k, pane) {
+  selectedDay = k;
+  const d = dateOf(k);
+  if (d) calCursor = new Date(d.getFullYear(), d.getMonth(), 1);
+  cancelEdit();
+  go("calendar");
+  renderCal();
+  if (pane) showPane(pane);
+}
+
+/* =========================================================================
+   SET BUILDER
+   One row per set, each with its own weight and reps.
+   ========================================================================= */
+function setBuilderRows() {
+  return [...$("set-builder").querySelectorAll(".sb-row")];
+}
+
+function addSetRow(w = "", r = "") {
+  const wrap = $("set-builder");
+  const idx = wrap.querySelectorAll(".sb-row").length + 1;
+  const row = document.createElement("div");
+  row.className = "sb-row";
+  row.innerHTML = `
+    <span class="sb-n">Set ${idx}</span>
+    <input type="number" class="sb-w" min="0" step="0.5" inputmode="decimal"
+           placeholder="kg" value="${esc(w)}" aria-label="Set ${idx} weight in kg">
+    <input type="number" class="sb-r" min="0" step="1" inputmode="numeric"
+           placeholder="reps" value="${esc(r)}" aria-label="Set ${idx} reps">
+    <button type="button" class="sb-del" onclick="removeSetRow(this)" aria-label="Remove set ${idx}">×</button>`;
+  wrap.appendChild(row);
+  renumberSets();
+  return row;
+}
+
+function removeSetRow(btn) {
+  const wrap = $("set-builder");
+  if (wrap.querySelectorAll(".sb-row").length <= 1) {
+    // Keep one row so the form is never empty; just clear it.
+    const row = btn.closest(".sb-row");
+    row.querySelector(".sb-w").value = "";
+    row.querySelector(".sb-r").value = "";
+    return;
+  }
+  btn.closest(".sb-row").remove();
+  renumberSets();
+}
+
+function renumberSets() {
+  setBuilderRows().forEach((row, i) => {
+    row.querySelector(".sb-n").textContent = `Set ${i + 1}`;
+    row.querySelector(".sb-w").setAttribute("aria-label", `Set ${i + 1} weight in kg`);
+    row.querySelector(".sb-r").setAttribute("aria-label", `Set ${i + 1} reps`);
+  });
+}
+
+/* New sets inherit the previous set's numbers — a 3×12 at one weight is then
+   three taps, and a ramp-up only needs the weight changed. */
+function addSetRowSmart() {
+  const rows = setBuilderRows();
+  const last = rows[rows.length - 1];
+  addSetRow(last ? last.querySelector(".sb-w").value : "",
+            last ? last.querySelector(".sb-r").value : "");
+}
+
+function readSets() {
+  return setBuilderRows().map(row => ({
+    w: num(row.querySelector(".sb-w").value),
+    r: int(row.querySelector(".sb-r").value),
+  })).filter(s => s.w > 0 || s.r > 0);
+}
+
+function resetSetBuilder(list) {
+  $("set-builder").innerHTML = "";
+  if (list && list.length) list.forEach(s => addSetRow(s.w || "", s.r || ""));
+  else { addSetRow(); addSetRow(); addSetRow(); }   // 3 sets is the common case
+}
+
+/* ---------- save / edit / delete workout ---------- */
+function editActivity(id) {
+  const row = WORKOUTS.find(r => String(r.id) === String(id));
+  if (!row) { toast("Couldn't find that activity", "err"); return; }
+
+  editingId = String(id);
+  $("f-exercise").value = row.exercise || "";
+  $("f-variant").value = row.variant || "";
+  $("f-notes").value = row.notes || "";
+  resetSetBuilder(normaliseSets(row));
+
+  $("w-form-title").textContent = "Edit exercise";
+  $("btn-save").textContent = "Update exercise";
+  $("edit-banner").innerHTML =
+    `<div class="editing-banner">Editing “${esc(row.exercise)}”
+       <button type="button" onclick="cancelEdit()">Cancel</button></div>`;
+  showPane("workout");
+  $("f-exercise").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelEdit() {
+  editingId = "";
+  $("edit-banner").innerHTML = "";
+  $("w-form-title").textContent = "Add an exercise";
+  $("btn-save").textContent = "Save exercise";
+  $("f-exercise").value = ""; $("f-variant").value = ""; $("f-notes").value = "";
+  resetSetBuilder(null);
+  const st = $("w-status"); st.textContent = ""; st.className = "status";
+}
+
+async function saveWorkout() {
+  const exercise = $("f-exercise").value.trim();
+  const sets = readSets();
+  const st = $("w-status");
+
+  if (!exercise) { st.textContent = "Exercise name is required."; st.className = "status err"; return; }
+  if (!sets.length) { st.textContent = "Add at least one set with a weight or reps."; st.className = "status err"; return; }
+  if (!isConfigured()) { st.textContent = "Backend not configured — see README."; st.className = "status err"; return; }
+
+  const btn = $("btn-save");
+  const wasEditing = !!editingId;
+  btn.disabled = true;
+  st.textContent = wasEditing ? "Updating…" : "Saving…";
+  st.className = "status";
+
+  try {
+    await postForm({
+      action: wasEditing ? "workoutUpdate" : "workout",
+      id: editingId,
+      date: selectedDay,
+      exercise,
+      variant: $("f-variant").value.trim(),
+      setsRaw: setsToRaw(sets),
+      notes: $("f-notes").value.trim(),
+    });
+
+    // The POST response isn't readable (Apps Script + no-cors), so confirm by
+    // re-reading the sheet and checking the change actually landed.
+    await new Promise(r => setTimeout(r, 900));
+    await refetch();
+
+    const landed = wasEditing
+      ? WORKOUTS.some(r => String(r.id) === editingId &&
+          r.exercise.trim().toLowerCase() === exercise.toLowerCase())
+      : workoutsOn(selectedDay).some(r =>
+          r.exercise.trim().toLowerCase() === exercise.toLowerCase());
+
+    if (landed) {
+      const verb = wasEditing ? "Updated" : "Saved";
+      st.textContent = `${verb} — ${exercise}, ${sets.length} set${sets.length > 1 ? "s" : ""} on ${niceDate(selectedDay, { day: "numeric", month: "short" })}.`;
+      st.className = "status ok";
+      toast(`${verb}: ${exercise}`, "ok");
+      cancelEdit();
+    } else {
+      st.textContent = "Sent, but not confirmed yet. Give it a moment and refresh.";
+      st.className = "status err";
+      toast("Sent, but not confirmed yet", "err");
+    }
+    renderAll();
+  } catch (err) {
+    st.textContent = "Could not save. Check your connection and try again.";
+    st.className = "status err";
+    toast("Save failed", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteActivity(id) {
+  const row = WORKOUTS.find(r => String(r.id) === String(id));
+  if (!row) return;
+  if (!confirm(`Delete “${row.exercise}” from ${niceDate(row.date, { day: "numeric", month: "short" })}?`)) return;
+
+  try {
+    await postForm({ action: "workoutDelete", id });
+    await new Promise(r => setTimeout(r, 900));
+    await refetch();
+    const gone = !WORKOUTS.some(r => String(r.id) === String(id));
+    toast(gone ? "Deleted" : "Sent, but not confirmed yet", gone ? "ok" : "err");
+    if (editingId === String(id)) cancelEdit();
+    renderAll();
+  } catch (err) {
+    toast("Delete failed", "err");
+  }
+}
+
+/* ---------- meals ---------- */
+function pickSlot(slot) {
+  mealSlot = slot;
+  for (const s of MEAL_SLOTS) $("slot-" + s).classList.toggle("active", s === slot);
+  prefillMeal();
+}
+
+function editMeal(slot) {
+  showPane("food");
+  pickSlot(slot);
+  $("m-food").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+/* Re-logging a slot overwrites it server-side, so show what's already there
+   rather than letting the user think they're adding a second entry. */
+function prefillMeal() {
+  const existing = mealsOn(selectedDay)[mealSlot];
+  const st = $("m-status");
+  clearPhoto();
+  if (existing && (existing.food || existing.photoUrl)) {
+    $("m-food").value = existing.food || "";
+    $("m-notes").value = existing.notes || "";
+    $("m-form-title").textContent = `Edit ${mealSlot} meal`;
+    st.textContent = "Already logged — saving will update this entry.";
+    st.className = "status";
+  } else {
+    $("m-food").value = "";
+    $("m-notes").value = "";
+    $("m-form-title").textContent = `Log ${mealSlot} meal`;
+    st.textContent = "";
+    st.className = "status";
+  }
+}
+
+/* Phones produce 3–8 MB photos; Apps Script POSTs cap out well below that.
+   Resize to max 1200px and re-encode as JPEG before sending. */
+function photoChosen(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  photoName = file.name.replace(/[^\w.\-]/g, "_").slice(0, 60);
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        const scale = MAX / Math.max(w, h);
+        w = Math.round(w * scale); h = Math.round(h * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      photoData = canvas.toDataURL("image/jpeg", 0.8);
+
+      const prev = $("m-preview");
+      prev.src = photoData; prev.hidden = false;
+      $("m-photo-label").textContent = "Change photo";
+      $("m-photo-clear").hidden = false;
+    };
+    img.onerror = () => toast("That file couldn't be read as an image", "err");
+    img.src = reader.result;
+  };
+  reader.onerror = () => toast("Could not read that file", "err");
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  photoData = ""; photoName = "";
+  $("m-photo").value = "";
+  $("m-preview").hidden = true;
+  $("m-photo-label").textContent = "Choose photo";
+  $("m-photo-clear").hidden = true;
+}
+
+async function saveMeal() {
+  const food = $("m-food").value.trim();
+  const st = $("m-status");
+
+  if (!food && !photoData) {
+    st.textContent = "Add what you ate, or attach a photo.";
+    st.className = "status err"; return;
+  }
+  if (!isConfigured()) { st.textContent = "Backend not configured — see README."; st.className = "status err"; return; }
+
+  const btn = $("btn-save-meal");
+  btn.disabled = true;
+  st.textContent = photoData ? "Uploading photo and saving…" : "Saving…";
+  st.className = "status";
+
+  try {
+    await postForm({
+      action: "meal",
+      date: selectedDay,
+      slot: mealSlot,
+      food,
+      notes: $("m-notes").value.trim(),
+      photoData,
+      photoName,
+    });
+
+    // Photo uploads take longer to land than a plain row.
+    await new Promise(r => setTimeout(r, photoData ? 2200 : 900));
+    await refetch();
+    const saved = mealsOn(selectedDay)[mealSlot];
+    const landed = saved && (saved.food === food || (!food && saved.photoUrl));
+
+    if (landed) {
+      st.textContent = `Saved — ${mealSlot} on ${niceDate(selectedDay, { day: "numeric", month: "short" })}.`;
+      st.className = "status ok";
+      toast(`Saved: ${mealSlot} meal`, "ok");
+      clearPhoto();
+    } else {
+      st.textContent = "Sent, but not confirmed yet. Give it a moment and refresh.";
+      st.className = "status err";
+      toast("Sent, but not confirmed yet", "err");
+    }
+    renderAll();
+  } catch (err) {
+    st.textContent = "Could not save. Check your connection and try again.";
+    st.className = "status err";
+    toast("Save failed", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------- progress ---------- */
+function renderProgress() {
+  const sel = $("pg-exercise");
+  const names = exerciseNames();
+  const prev = sel.value;
+  sel.innerHTML = names.map(n => `<option${n === prev ? " selected" : ""}>${esc(n)}</option>`).join("");
+  if (!names.length) {
+    $("pg-stats").innerHTML = "";
+    $("pg-chart").innerHTML = `<div class="pg-empty">Log a workout to see your progress.</div>`;
+    return;
+  }
+  const name = sel.value || names[0];
+  const metric = $("pg-metric").value;
+
+  const agg = {};
+  for (const r of WORKOUTS) {
+    if (String(r.exercise).trim().toLowerCase() !== name.toLowerCase()) continue;
+    const k = toKey(r.date);
+    if (!k) continue;
+    const list = normaliseSets(r);
+    const a = agg[k] = agg[k] || { top: 0, e1rm: 0, volume: 0 };
+    for (const s of list) {
+      a.top = Math.max(a.top, s.w);
+      if (s.w > 0 && s.r > 0) a.e1rm = Math.max(a.e1rm, s.w * (1 + s.r / 30));   // Epley
+    }
+    a.volume += setsVolume(list);
+  }
+
+  const dates = Object.keys(agg).sort();
+  const pts = dates.map(d => ({ d, v: agg[d][metric] }));
+  const pr = dates.length ? Math.max(...dates.map(d => agg[d].top)) : 0;
+  const best1 = dates.length ? Math.max(...dates.map(d => agg[d].e1rm)) : 0;
+  const last = dates[dates.length - 1];
+
+  $("pg-stats").innerHTML = `
+    <div class="card stat"><div class="num">${fmtKg(pr)}<small> kg</small></div><div class="lbl">Heaviest set</div></div>
+    <div class="card stat"><div class="num">${fmtKg(best1)}<small> kg</small></div><div class="lbl">Best est. 1RM</div></div>
+    <div class="card stat"><div class="num">${dates.length}</div><div class="lbl">Sessions</div></div>
+    <div class="card stat"><div class="num sm">${last ? niceDate(last, { day: "numeric", month: "short", year: "numeric" }) : "—"}</div><div class="lbl">Last trained</div></div>`;
+
+  $("pg-chart").innerHTML = lineChart(pts);
+}
+
+/* ---------- boot ---------- */
+function renderAll() {
+  rebuildIndex();
+  renderDashboard();
+  renderCal();
+  renderProgress();
+}
+
+initHeader();
+resetSetBuilder(null);
+
+// Chart geometry differs across the mobile breakpoint — redraw on rotation.
+const mq = window.matchMedia("(max-width:640px)");
+const onBp = () => { if ($("view-progress").classList.contains("active")) renderProgress(); };
+if (mq.addEventListener) mq.addEventListener("change", onBp); else mq.addListener(onBp);
+
+renderAll();
+loadData("setup-warn-slot", renderAll);
+</script>
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0B1B33">
+<meta name="color-scheme" content="light">
+<title>WorkoutTracker — Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="site-head">
+  <header>
+    <div class="brand">
+      <h1>Workout<span>Tracker</span></h1>
+      <span class="role-tag coach">Coach view</span>
+    </div>
+    <nav aria-label="Main">
+      <button id="tab-dashboard" class="active" onclick="go('dashboard')">Dashboard</button>
+      <button id="tab-history" onclick="go('history')">History</button>
+      <button id="tab-calendar" onclick="go('calendar')">Calendar</button>
+    </nav>
+  </header>
+</div>
+
+<main>
+  <div id="setup-warn-slot"></div>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <section class="view active" id="view-dashboard">
+    <div class="readonly-note">
+      <span aria-hidden="true">👁</span>
+      <span>Read-only view of your client's log. Nothing here can be edited or added.</span>
+    </div>
+
+    <div class="card today-bar">
+      <div class="grow">
+        <div class="date" id="dash-today"></div>
+        <div class="top" style="margin-top:8px">
+          <span class="pill" id="dash-status">…</span>
+          <span class="pill" id="dash-streak">…</span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section">This week</h2>
+    <div class="stats">
+      <div class="card stat"><div class="num" id="st-workouts">–</div><div class="lbl">Workouts</div></div>
+      <div class="card stat"><div class="num" id="st-sets">–</div><div class="lbl">Total sets</div></div>
+      <div class="card stat"><div class="num" id="st-volume">–</div><div class="lbl">Volume lifted</div></div>
+      <div class="card stat"><div class="num sm" id="st-last">–</div><div class="lbl">Last trained</div></div>
+    </div>
+
+    <h2 class="section">Last 14 days</h2>
+    <div class="daystrip" id="daystrip"><div class="card loading">Loading…</div></div>
+
+    <h2 class="section">Recent sessions</h2>
+    <div class="sessions" id="recent-sessions"></div>
+  </section>
+
+  <!-- ==================== HISTORY ==================== -->
+  <section class="view" id="view-history">
+    <div class="card filter-bar">
+      <div class="filter-presets" role="group" aria-label="Date range presets">
+        <button id="p-7"  onclick="setPreset(7)">Last 7 days</button>
+        <button id="p-30" class="active" onclick="setPreset(30)">Last 30 days</button>
+        <button id="p-90" onclick="setPreset(90)">Last 90 days</button>
+        <button id="p-0"  onclick="setPreset(0)">All time</button>
+      </div>
+      <div class="filter-range">
+        <div><label for="f-from">From</label><input type="date" id="f-from" onchange="customRange()"></div>
+        <div><label for="f-to">To</label><input type="date" id="f-to" onchange="customRange()"></div>
+      </div>
+      <div class="filter-count" id="filter-count"></div>
+    </div>
+
+    <div class="sessions" id="history-list"></div>
+  </section>
+
+  <!-- ==================== CALENDAR ==================== -->
+  <section class="view" id="view-calendar">
+    <div class="cal-layout">
+      <div class="card cal-card">
+        <div class="cal-head">
+          <div class="month" id="cal-month"></div>
+          <button class="today-btn" onclick="calToday(renderCal)">Today</button>
+          <button class="nav-btn" onclick="calShift(-1, renderCal)" aria-label="Previous month">‹</button>
+          <button class="nav-btn" onclick="calShift(1, renderCal)" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span><span class="key trained"></span>gym day</span>
+          <span><span class="key"></span>sets done</span>
+          <span><span class="key food"></span>meals logged</span>
+        </div>
+      </div>
+
+      <!-- Day detail below the grid: tap a date to see that day's activity. -->
+      <div class="card day-panel" id="day-panel">
+        <h3><span id="dp-date"></span><span class="sub" id="dp-summary"></span></h3>
+
+        <div class="day-toggle" role="tablist" aria-label="Day contents">
+          <button id="dtab-workout" class="active" role="tab" onclick="showPane('workout')">
+            Workout<span class="count" id="dcount-workout">0</span>
+          </button>
+          <button id="dtab-food" role="tab" onclick="showPane('food')">
+            Food<span class="count" id="dcount-food">0</span>
+          </button>
+        </div>
+
+        <div class="day-pane active" id="pane-workout">
+          <div class="entries" id="dp-activities"></div>
+        </div>
+        <div class="day-pane" id="pane-food">
+          <div class="meal-group" id="dp-meals"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+<script>
+/* Coach build: rendering only. There is no postForm() call anywhere in this
+   file — the page cannot write to the sheet even if someone pokes at it. */
+const VIEWS = ["dashboard", "history", "calendar"];
+let dayPane = "workout";
+
+function go(name) {
+  showView(name, VIEWS);
+  if (name === "history") renderHistory();
+}
+
+/* ---------- dashboard ---------- */
+function renderDashboard() {
+  $("dash-today").textContent =
+    niceDate(todayKey(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  const rows = workoutsOn(todayKey());
+  const ds = $("dash-status");
+  if (rows.length) {
+    ds.textContent = `✓ trained today · ${rows.length} exercise${rows.length > 1 ? "s" : ""}`;
+    ds.className = "pill done";
+  } else {
+    ds.textContent = "no workout logged today";
+    ds.className = "pill";
+  }
+
+  // Consecutive days trained, counting back from today.
+  let streak = 0;
+  for (let i = 0; i < 400; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    if (workoutsOn(keyOf(d)).length) streak++;
+    else if (i > 0) break;
+  }
+  const st = $("dash-streak");
+  st.textContent = streak > 1 ? `${streak}-day streak` : "no active streak";
+  st.className = streak > 1 ? "pill blue" : "pill";
+
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weekKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    weekKeys.push(keyOf(d));
+  }
+  const weekRows = weekKeys.flatMap(k => workoutsOn(k));
+  const days = trainedDays();
+  const last = days[days.length - 1];
+
+  $("st-workouts").textContent = weekKeys.filter(k => workoutsOn(k).length).length;
+  $("st-sets").textContent = setsOf(weekRows);
+  $("st-volume").innerHTML = `${Math.round(volumeOf(weekRows)).toLocaleString()}<small> kg</small>`;
+  $("st-last").textContent = last ? niceDate(last, { day: "numeric", month: "short" }) : "—";
+
+  renderDaystrip();
+  renderRecent();
+}
+
+/* Card row — one card per day for the last 14 days, newest first. */
+function renderDaystrip() {
+  const cards = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const k = keyOf(d);
+    const rows = workoutsOn(k);
+    const meals = mealCount(k);
+
+    if (rows.length) {
+      const names = [...new Set(rows.map(r => String(r.exercise).trim()).filter(Boolean))];
+      const shown = names.slice(0, 3).map(esc).join(", ");
+      const more = names.length > 3 ? ` +${names.length - 3} more` : "";
+      cards.push(`
+        <button class="daycard" onclick="openDay('${k}')">
+          <span class="dc-dow">${dowShort(k)}${k === todayKey() ? " · today" : ""}</span>
+          <span class="dc-date">${dayNum(k)}<small>${monShort(k)}</small></span>
+          <span class="dc-body"><b>${setsOf(rows)} sets</b> · ${Math.round(volumeOf(rows)).toLocaleString()} kg<br>${shown}${more}</span>
+          <span class="dc-foot">${meals ? `${meals} meal${meals > 1 ? "s" : ""} · ` : ""}View →</span>
+        </button>`);
+    } else {
+      cards.push(`
+        <button class="daycard rest" onclick="openDay('${k}')">
+          <span class="dc-dow">${dowShort(k)}${k === todayKey() ? " · today" : ""}</span>
+          <span class="dc-date">${dayNum(k)}<small>${monShort(k)}</small></span>
+          <span class="dc-body">No workout logged</span>
+          <span class="dc-foot">${meals ? `${meals} meal${meals > 1 ? "s" : ""}` : "Rest"}</span>
+        </button>`);
+    }
+  }
+  $("daystrip").innerHTML = cards.join("");
+}
+
+function renderRecent() {
+  const wrap = $("recent-sessions");
+  const days = trainedDays().reverse().slice(0, 6);
+  wrap.innerHTML = days.length
+    ? days.map(sessionCard).join("")
+    : `<div class="card no-entries">No sessions logged yet.</div>`;
+}
+
+function sessionCard(k) {
+  const rows = workoutsOn(k);
+  const chips = rows.map(r => {
+    const list = normaliseSets(r);
+    return `<span class="chip">${esc(r.exercise)} <small>${esc(setsSummary(list))}${
+      weightSummary(list) ? " · " + esc(weightSummary(list)) : ""}</small></span>`;
+  }).join("");
+  const mc = mealCount(k);
+  return `
+    <button class="card session" onclick="openDay('${k}')">
+      <span class="when">${monShort(k)}<b>${dayNum(k)}</b>${dowShort(k)}</span>
+      <span class="what">
+        <span class="chips">${chips}${mc ? `<span class="chip meal">${mc} meal${mc > 1 ? "s" : ""}</span>` : ""}</span>
+        <div class="meta">${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg volume</div>
+      </span>
+    </button>`;
+}
+
+/* ---------- history + date filter ---------- */
+function setPreset(days) {
+  for (const p of [7, 30, 90, 0]) $("p-" + p).classList.toggle("active", p === days);
+
+  const to = new Date();
+  if (days === 0) {
+    const all = trainedDays();
+    $("f-from").value = all[0] || todayKey();
+  } else {
+    const from = new Date();
+    from.setDate(to.getDate() - (days - 1));
+    $("f-from").value = keyOf(from);
+  }
+  $("f-to").value = keyOf(to);
+  renderHistory();
+}
+
+/* Typing in either date box drops the preset highlight. */
+function customRange() {
+  for (const p of [7, 30, 90, 0]) $("p-" + p).classList.remove("active");
+  renderHistory();
+}
+
+function renderHistory() {
+  const from = toKey($("f-from").value);
+  const to = toKey($("f-to").value);
+
+  let days = trainedDays();
+  if (from) days = days.filter(k => k >= from);   // yyyy-mm-dd sorts lexically
+  if (to)   days = days.filter(k => k <= to);
+  days = days.reverse();
+
+  const rows = days.flatMap(k => workoutsOn(k));
+  const label = (from && to)
+    ? `${niceDate(from, { day: "numeric", month: "short", year: "numeric" })} – ${niceDate(to, { day: "numeric", month: "short", year: "numeric" })}`
+    : "all time";
+  $("filter-count").textContent =
+    `${days.length} session${days.length === 1 ? "" : "s"} · ${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg — ${label}`;
+
+  $("history-list").innerHTML = days.length
+    ? days.map(sessionCard).join("")
+    : `<div class="card no-entries">No workouts logged in this date range.</div>`;
+}
+
+/* ---------- calendar (read-only) ---------- */
+function renderCal() {
+  renderCalendarInto("cal-grid", "cal-month", (k) => {
+    selectedDay = k;
+    renderCal();
+    $("day-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  renderDayPanel();
+}
+
+function showPane(name) {
+  dayPane = name;
+  $("dtab-workout").classList.toggle("active", name === "workout");
+  $("dtab-food").classList.toggle("active", name === "food");
+  $("pane-workout").classList.toggle("active", name === "workout");
+  $("pane-food").classList.toggle("active", name === "food");
+}
+
+function renderDayPanel() {
+  const rows = workoutsOn(selectedDay);
+  const mc = mealCount(selectedDay);
+
+  $("dp-date").textContent = niceDate(selectedDay);
+  const bits = [];
+  if (rows.length) bits.push(`${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg`);
+  if (mc) bits.push(`${mc} meal${mc > 1 ? "s" : ""}`);
+  $("dp-summary").textContent = bits.join(" · ") || "nothing logged";
+
+  $("dcount-workout").textContent = rows.length;
+  $("dcount-food").textContent = mc;
+
+  // `false` = no edit/delete controls rendered.
+  $("dp-activities").innerHTML = activitiesHtml(rows, false);
+  $("dp-meals").innerHTML = mealsHtml(selectedDay, false);
+}
+
+function openDay(k) {
+  selectedDay = k;
+  const d = dateOf(k);
+  if (d) calCursor = new Date(d.getFullYear(), d.getMonth(), 1);
+  go("calendar");
+  renderCal();
+}
+
+/* ---------- boot ---------- */
+function renderAll() {
+  rebuildIndex();
+  renderDashboard();
+  renderCal();
+  renderHistory();
+}
+
+initHeader();
+setPreset(30);
+renderAll();
+loadData("setup-warn-slot", renderAll);
+</script>
+</body>
+</html>
