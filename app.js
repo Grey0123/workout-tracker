@@ -437,13 +437,49 @@ function lineChart(pts) {
   </svg>`;
 }
 
+/* =========================================================================
+   EXERCISE NAMES
+   Free-text entry means "Bench Press", "bench press" and "Bench  Press" would
+   otherwise fragment into three exercises. They're the same lift, so we group
+   case-insensitively and pick the most-used spelling as the display name.
+
+   This also fixes a real bug: the Progress chart matched exercises
+   case-insensitively while the dropdown listed each spelling separately — so
+   picking one option silently plotted several. Now the list and the chart
+   agree on what counts as one exercise.
+   ========================================================================= */
+
+/** Trim and collapse internal whitespace — the one place a name is cleaned. */
+const cleanName = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+
+/** Distinct exercises, most-used spelling winning, ordered by frequency. */
 function exerciseNames() {
-  const count = {};
+  const groups = {};
   for (const r of WORKOUTS) {
-    const n = String(r.exercise || "").trim();
-    if (n) count[n] = (count[n] || 0) + 1;
+    const disp = cleanName(r.exercise);
+    if (!disp) continue;
+    const key = disp.toLowerCase();
+    const g = groups[key] || (groups[key] = { total: 0, spellings: {} });
+    g.total++;
+    g.spellings[disp] = (g.spellings[disp] || 0) + 1;
   }
-  return Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b));
+  return Object.values(groups)
+    .map(g => ({
+      disp: Object.keys(g.spellings).sort((a, b) =>
+        g.spellings[b] - g.spellings[a] || a.localeCompare(b))[0],
+      total: g.total,
+    }))
+    .sort((a, b) => b.total - a.total || a.disp.localeCompare(b.disp))
+    .map(x => x.disp);
+}
+
+/** Canonical spelling for a name being saved: reuse the established spelling if
+    this exercise already exists (any casing), otherwise keep what was typed. */
+function canonExercise(name) {
+  const clean = cleanName(name);
+  if (!clean) return clean;
+  const key = clean.toLowerCase();
+  return exerciseNames().find(n => n.toLowerCase() === key) || clean;
 }
 
 /* ---------- data ---------- */
@@ -460,6 +496,36 @@ function absorb(data) {
   MEALS = Array.isArray(data.meals) ? data.meals : [];
 }
 
+/* =========================================================================
+   OFFLINE CACHE
+   Apps Script's cold GET is a 1–2s spin, so the first paint used to be a
+   "Loading…" wait. We stash the last good payload and hydrate from it on boot,
+   render instantly, then refresh from the network in the background.
+
+   Photo URLs in the cache are always Drive links (never a local data: URL),
+   because only server payloads are cached — so the cache stays small.
+   ========================================================================= */
+const CACHE_KEY = "wt-cache-v1";
+
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ workouts: WORKOUTS, meals: MEALS }));
+  } catch (err) {
+    // Private mode / quota / no localStorage — caching is best-effort.
+  }
+}
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return (Array.isArray(data.workouts) || Array.isArray(data.meals)) ? data : null;
+  } catch (err) {
+    return null;
+  }
+}
+
 async function loadData(slotId, onDone) {
   if (!isConfigured()) {
     setupWarning(slotId, `<b>Setup needed:</b> deploy the Apps Script from <code>Code.gs</code>
@@ -468,13 +534,23 @@ async function loadData(slotId, onDone) {
     onDone();
     return;
   }
+  // Hydrate from the last good payload so the app paints immediately, then go
+  // to the network. onDone (renderAll) runs once now and again after the fetch.
+  const cached = loadCache();
+  if (cached) { absorb(cached); onDone(); }
+
   try {
     const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" });
     absorb(await res.json());
+    saveCache();
     onDone();
   } catch (err) {
-    setupWarning(slotId, `Could not load data from Google Sheets. Check the Web App is
-      deployed with access set to <b>“Anyone”</b> and that the URL in <code>app.js</code> is correct.`);
+    // If we already rendered cached data, a failed refresh is silent — no point
+    // scaring the user with a setup warning over stale-but-shown data.
+    if (!cached) {
+      setupWarning(slotId, `Could not load data from Google Sheets. Check the Web App is
+        deployed with access set to <b>“Anyone”</b> and that the URL in <code>app.js</code> is correct.`);
+    }
     onDone();
   }
 }
@@ -495,6 +571,7 @@ async function postForm(fields) {
 async function refetch() {
   const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" });
   absorb(await res.json());
+  saveCache();
   rebuildIndex();
 }
 

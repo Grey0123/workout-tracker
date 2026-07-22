@@ -415,7 +415,7 @@ function cancelEdit() {
 }
 
 async function saveWorkout() {
-  const exercise = $("f-exercise").value.trim();
+  const exercise = canonExercise($("f-exercise").value);
   const sets = readSets();
   const st = $("w-status");
 
