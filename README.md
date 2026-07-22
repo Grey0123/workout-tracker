@@ -78,8 +78,8 @@ Both pages read this one value.
 
 3. **Settings → Pages → Source: Deploy from a branch → main / root → Save**.
 4. After a minute:
-   - Your side: `https://YOUR_USERNAME.github.io/workout-tracker/`
-   - Coach side: `https://YOUR_USERNAME.github.io/workout-tracker/coach.html`
+   - Your side: `https://Grey0123.github.io/workout-tracker/`
+   - Coach side: `https://Grey0123.github.io/workout-tracker/coach.html`
 
 Send your coach the second link.
 

@@ -425,48 +425,35 @@ async function saveWorkout() {
 
   const btn = $("btn-save");
   const wasEditing = !!editingId;
-  btn.disabled = true;
-  st.textContent = wasEditing ? "Updating…" : "Saving…";
-  st.className = "status";
+  const day = selectedDay;
+  const variant = $("f-variant").value.trim();
+  const notes = $("f-notes").value.trim();
+  const verb = wasEditing ? "Updated" : "Saved";
+
+  // Optimistic: reflect the change locally and render right away so Save feels
+  // instant. The network write happens in the background.
+  localUpsertWorkout(wasEditing ? editingId : null, { date: day, exercise, variant, notes, setList: sets });
+  st.textContent = `${verb} — ${exercise}, ${sets.length} set${sets.length > 1 ? "s" : ""} on ${niceDate(day, { day: "numeric", month: "short" })}.`;
+  st.className = "status ok";
+  toast(`${verb}: ${exercise}`, "ok");
+  cancelEdit();
+  renderAll();
 
   try {
     await postForm({
       action: wasEditing ? "workoutUpdate" : "workout",
-      id: editingId,
-      date: selectedDay,
-      exercise,
-      variant: $("f-variant").value.trim(),
-      setsRaw: setsToRaw(sets),
-      notes: $("f-notes").value.trim(),
+      id: wasEditing ? editingId : "",
+      date: day, exercise, variant,
+      setsRaw: setsToRaw(sets), notes,
     });
-
-    // The POST response isn't readable (Apps Script + no-cors), so confirm by
-    // re-reading the sheet and checking the change actually landed.
-    await new Promise(r => setTimeout(r, 900));
-    await refetch();
-
-    const landed = wasEditing
-      ? WORKOUTS.some(r => String(r.id) === editingId &&
-          r.exercise.trim().toLowerCase() === exercise.toLowerCase())
-      : workoutsOn(selectedDay).some(r =>
-          r.exercise.trim().toLowerCase() === exercise.toLowerCase());
-
-    if (landed) {
-      const verb = wasEditing ? "Updated" : "Saved";
-      st.textContent = `${verb} — ${exercise}, ${sets.length} set${sets.length > 1 ? "s" : ""} on ${niceDate(selectedDay, { day: "numeric", month: "short" })}.`;
-      st.className = "status ok";
-      toast(`${verb}: ${exercise}`, "ok");
-      cancelEdit();
-    } else {
-      st.textContent = "Sent, but not confirmed yet. Give it a moment and refresh.";
-      st.className = "status err";
-      toast("Sent, but not confirmed yet", "err");
-    }
-    renderAll();
+    // Background: sync real ids from the sheet and confirm it landed.
+    reconcile(
+      () => workoutsOn(day).some(r => r.exercise.trim().toLowerCase() === exercise.toLowerCase()),
+      verb, renderAll
+    );
   } catch (err) {
-    st.textContent = "Could not save. Check your connection and try again.";
-    st.className = "status err";
-    toast("Save failed", "err");
+    toast("Save failed — check your connection", "err");
+    await refetch(); renderAll();   // roll the optimistic change back
   } finally {
     btn.disabled = false;
   }
@@ -477,16 +464,18 @@ async function deleteActivity(id) {
   if (!row) return;
   if (!confirm(`Delete “${row.exercise}” from ${niceDate(row.date, { day: "numeric", month: "short" })}?`)) return;
 
+  const name = row.exercise;
+  if (editingId === String(id)) cancelEdit();
+  localDeleteWorkout(id);          // optimistic removal
+  toast("Deleted", "ok");
+  renderAll();
+
   try {
     await postForm({ action: "workoutDelete", id });
-    await new Promise(r => setTimeout(r, 900));
-    await refetch();
-    const gone = !WORKOUTS.some(r => String(r.id) === String(id));
-    toast(gone ? "Deleted" : "Sent, but not confirmed yet", gone ? "ok" : "err");
-    if (editingId === String(id)) cancelEdit();
-    renderAll();
+    reconcile(() => !WORKOUTS.some(r => String(r.id) === String(id)), "Delete", renderAll);
   } catch (err) {
-    toast("Delete failed", "err");
+    toast(`Couldn't delete ${name} — check your connection`, "err");
+    await refetch(); renderAll();
   }
 }
 
@@ -577,44 +566,57 @@ async function saveMeal() {
   if (!isConfigured()) { st.textContent = "Backend not configured — see README."; st.className = "status err"; return; }
 
   const btn = $("btn-save-meal");
-  btn.disabled = true;
-  st.textContent = photoData ? "Uploading photo and saving…" : "Saving…";
-  st.className = "status";
+  const day = selectedDay;
+  const slot = mealSlot;
+  const notes = $("m-notes").value.trim();
+  const localPhoto = photoData;   // data: URL, shown until Drive link syncs in
+
+  // Optimistic: show the meal (and photo preview) immediately.
+  localUpsertMeal({ date: day, slot, food, notes, photoUrl: localPhoto });
+  st.textContent = `Saved — ${slot} on ${niceDate(day, { day: "numeric", month: "short" })}.`;
+  st.className = "status ok";
+  toast(`Saved: ${slot} meal`, "ok");
+  const hadPhoto = !!photoData;
+  clearPhoto();
+  renderAll();
 
   try {
     await postForm({
       action: "meal",
-      date: selectedDay,
-      slot: mealSlot,
-      food,
-      notes: $("m-notes").value.trim(),
-      photoData,
-      photoName,
+      date: day, slot, food, notes,
+      photoData: localPhoto, photoName,
     });
-
-    // Photo uploads take longer to land than a plain row.
-    await new Promise(r => setTimeout(r, photoData ? 2200 : 900));
-    await refetch();
-    const saved = mealsOn(selectedDay)[mealSlot];
-    const landed = saved && (saved.food === food || (!food && saved.photoUrl));
-
-    if (landed) {
-      st.textContent = `Saved — ${mealSlot} on ${niceDate(selectedDay, { day: "numeric", month: "short" })}.`;
-      st.className = "status ok";
-      toast(`Saved: ${mealSlot} meal`, "ok");
-      clearPhoto();
-    } else {
-      st.textContent = "Sent, but not confirmed yet. Give it a moment and refresh.";
-      st.className = "status err";
-      toast("Sent, but not confirmed yet", "err");
-    }
-    renderAll();
+    // Photos take longer to land server-side (upload + Drive), so give the
+    // background sync more time before it checks.
+    reconcile(
+      () => { const s = mealsOn(day)[slot]; return s && (s.food === food || (!food && s.photoUrl)); },
+      "Meal", renderAll, { delay: hadPhoto ? 2600 : 1400 }
+    );
   } catch (err) {
-    st.textContent = "Could not save. Check your connection and try again.";
-    st.className = "status err";
-    toast("Save failed", "err");
+    toast("Save failed — check your connection", "err");
+    await refetch(); renderAll();
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function deleteMeal(slot) {
+  const meal = mealsOn(selectedDay)[slot];
+  if (!meal) return;
+  if (!confirm(`Delete your ${slot} meal on ${niceDate(selectedDay, { day: "numeric", month: "short" })}?`)) return;
+
+  const day = selectedDay;
+  localDeleteMeal(day, slot);      // optimistic removal
+  toast(`Deleted ${slot} meal`, "ok");
+  if (slot === mealSlot) prefillMeal();
+  renderAll();
+
+  try {
+    await postForm({ action: "mealDelete", id: meal.id });
+    reconcile(() => !(mealsOn(day)[slot]), "Delete", renderAll);
+  } catch (err) {
+    toast("Delete failed — check your connection", "err");
+    await refetch(); renderAll();
   }
 }
 

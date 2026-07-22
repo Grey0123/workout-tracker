@@ -337,10 +337,16 @@ function mealsHtml(dayKey, actions) {
       ? `${esc(e.food || "")}${e.notes ? `<span class="note"> — ${esc(e.notes)}</span>` : ""}
          ${e.photoUrl ? photoHtml(e.photoUrl) : ""}`
       : `<span class="empty">not logged</span>`;
+    const btns = !actions ? "" : has
+      ? `<span class="slot-btns">
+           <button class="btn ghost sm" onclick="editMeal('${slot}')">Edit</button>
+           <button class="btn ghost sm danger" onclick="deleteMeal('${slot}')">Delete</button>
+         </span>`
+      : `<button class="btn ghost sm" onclick="editMeal('${slot}')">Add</button>`;
     return `<div class="meal-slot">
       <span class="slot-tag">${slot}</span>
       <span class="slot-body">${body}</span>
-      ${actions ? `<button class="btn ghost sm" onclick="editMeal('${slot}')">${has ? "Edit" : "Add"}</button>` : ""}
+      ${btns}
     </div>`;
   }).join("");
 }
@@ -348,6 +354,12 @@ function mealsHtml(dayKey, actions) {
 /* Drive share links can't be used as <img src> directly; the thumbnail
    endpoint can. Fall back to a plain link for non-Drive URLs. */
 function photoHtml(url) {
+  const s = String(url || "");
+  // Optimistic previews carry the local data: URL until the background sync
+  // swaps in the real Drive link — render those directly.
+  if (s.startsWith("data:")) {
+    return `<img class="meal-photo" alt="Meal photo" src="${esc(s)}">`;
+  }
   const id = driveFileId(url);
   if (id) {
     return `<a href="${esc(url)}" target="_blank" rel="noopener">
@@ -484,4 +496,74 @@ async function refetch() {
   const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" });
   absorb(await res.json());
   rebuildIndex();
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/* =========================================================================
+   OPTIMISTIC UPDATES
+   Apps Script can't return a readable response to the browser, and re-reading
+   the whole sheet takes a second or two — so waiting for confirmation before
+   showing "Saved" is what made saving feel slow.
+
+   Instead we apply the change to local state immediately and render, so the UI
+   updates the instant you tap Save. reconcile() then re-reads the sheet in the
+   background to pick up the server's real ids / photo URLs, and only warns if
+   the change didn't actually land.
+   ========================================================================= */
+
+let TMP_SEQ = 0;
+const tempId = () => `tmp-${Date.now()}-${TMP_SEQ++}`;
+
+function localUpsertWorkout(id, data) {
+  const row = {
+    id: id || tempId(),
+    date: data.date,
+    exercise: data.exercise,
+    variant: data.variant || "",
+    notes: data.notes || "",
+    setList: (data.setList || []).map(s => ({ w: num(s.w), r: int(s.r) })),
+    weight: "", reps: "", sets: String((data.setList || []).length),
+    _pending: true,
+  };
+  const i = id ? WORKOUTS.findIndex(r => String(r.id) === String(id)) : -1;
+  if (i >= 0) WORKOUTS[i] = row; else WORKOUTS.push(row);
+  rebuildIndex();
+  return row.id;
+}
+
+function localDeleteWorkout(id) {
+  WORKOUTS = WORKOUTS.filter(r => String(r.id) !== String(id));
+  rebuildIndex();
+}
+
+function localUpsertMeal(meal) {
+  MEALS = MEALS.filter(m => !(m.date === meal.date && m.slot === meal.slot));
+  MEALS.push(Object.assign({ id: tempId(), _pending: true }, meal));
+  rebuildIndex();
+}
+
+function localDeleteMeal(date, slot) {
+  MEALS = MEALS.filter(m => !(m.date === date && m.slot === slot));
+  rebuildIndex();
+}
+
+/**
+ * Background sync. Waits, re-reads the sheet, re-renders with authoritative
+ * data, then runs checkFn against the fresh state. If the change isn't there,
+ * warns via toast. `rerender` is the page's renderAll.
+ */
+async function reconcile(checkFn, label, rerender, opts) {
+  const o = opts || {};
+  try {
+    await sleep(o.delay || 1400);
+    await refetch();
+    if (typeof rerender === "function") rerender();
+    if (checkFn && !checkFn()) {
+      toast(`${label} sent but not confirmed yet — pull to refresh in a moment.`, "err", 4200);
+    }
+  } catch (err) {
+    // A failed background read isn't fatal; the optimistic state still stands.
+    console.warn("reconcile failed:", err);
+  }
 }

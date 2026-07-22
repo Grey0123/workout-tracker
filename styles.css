@@ -344,6 +344,8 @@ h2.section:first-child{margin-top:0}
 }
 .meal-slot .slot-body{flex:1;min-width:0;font-size:14px}
 .meal-slot .slot-body .empty{color:var(--muted-2);font-style:italic;font-size:13px}
+.meal-slot .slot-btns{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;width:78px}
+.meal-slot .slot-btns .btn.sm{width:100%;flex:0 0 auto}
 .meal-photo{
   display:block;margin-top:7px;width:100%;max-width:220px;
   border-radius:var(--radius-sm);border:1px solid var(--line);
