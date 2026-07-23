@@ -606,41 +606,74 @@ function localUpsertWorkout(id, data) {
   const i = id ? WORKOUTS.findIndex(r => String(r.id) === String(id)) : -1;
   if (i >= 0) WORKOUTS[i] = row; else WORKOUTS.push(row);
   rebuildIndex();
+  saveCache();
   return row.id;
 }
 
 function localDeleteWorkout(id) {
   WORKOUTS = WORKOUTS.filter(r => String(r.id) !== String(id));
   rebuildIndex();
+  saveCache();
 }
 
 function localUpsertMeal(meal) {
   MEALS = MEALS.filter(m => !(m.date === meal.date && m.slot === meal.slot));
   MEALS.push(Object.assign({ id: tempId(), _pending: true }, meal));
   rebuildIndex();
+  saveCache();
 }
 
 function localDeleteMeal(date, slot) {
   MEALS = MEALS.filter(m => !(m.date === date && m.slot === slot));
   rebuildIndex();
+  saveCache();
 }
 
 /**
- * Background sync. Waits, re-reads the sheet, re-renders with authoritative
- * data, then runs checkFn against the fresh state. If the change isn't there,
- * warns via toast. `rerender` is the page's renderAll.
+ * Background sync — confirm an optimistic change actually landed on the server.
+ *
+ * Apps Script commits a write a beat AFTER doPost returns, and doGet can race
+ * ahead of that commit. A single re-read therefore sometimes pulls the sheet
+ * from *before* the write and clobbers the change the user just made — the
+ * "my edit reverted" bug. So we poll instead: re-read, check, and if the server
+ * doesn't reflect the change yet, restore the optimistic state (never show a
+ * stale version) and try again a moment later.
+ *
+ * checkFn must verify the server genuinely reflects the change — e.g. compare
+ * the saved sets, not merely that the exercise name still exists. `rerender` is
+ * the page's renderAll.
  */
 async function reconcile(checkFn, label, rerender, opts) {
   const o = opts || {};
-  try {
-    await sleep(o.delay || 1400);
-    await refetch();
-    if (typeof rerender === "function") rerender();
-    if (checkFn && !checkFn()) {
-      toast(`${label} sent but not confirmed yet — pull to refresh in a moment.`, "err", 4200);
+  const attempts = o.attempts || 5;
+  const first = o.delay || 1200;
+  const gap = o.gap || 900;
+  const render = () => { if (typeof rerender === "function") rerender(); };
+
+  for (let i = 0; i < attempts; i++) {
+    await sleep(i === 0 ? first : gap);
+
+    // Snapshot the optimistic state so a stale read can't wipe it.
+    const optW = WORKOUTS, optM = MEALS;
+    try {
+      await refetch();                 // pulls server data + caches it
+    } catch (err) {
+      WORKOUTS = optW; MEALS = optM;   // network hiccup — keep optimistic, retry
+      continue;
     }
-  } catch (err) {
-    // A failed background read isn't fatal; the optimistic state still stands.
-    console.warn("reconcile failed:", err);
+
+    if (!checkFn || checkFn()) {
+      render();                        // confirmed — server data is authoritative
+      return;
+    }
+
+    // Server hasn't caught up yet. Re-show the optimistic state and re-cache it
+    // so a reload wouldn't surface the stale version either, then poll again.
+    WORKOUTS = optW; MEALS = optM;
+    rebuildIndex();
+    saveCache();
+    render();
   }
+
+  toast(`${label} sent but not confirmed yet — pull to refresh in a moment.`, "err", 4200);
 }

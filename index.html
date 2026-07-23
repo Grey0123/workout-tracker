@@ -439,16 +439,21 @@ async function saveWorkout() {
   cancelEdit();
   renderAll();
 
+  const setsRaw = setsToRaw(sets);
   try {
     await postForm({
       action: wasEditing ? "workoutUpdate" : "workout",
       id: wasEditing ? editingId : "",
       date: day, exercise, variant,
-      setsRaw: setsToRaw(sets), notes,
+      setsRaw, notes,
     });
-    // Background: sync real ids from the sheet and confirm it landed.
+    // Background: sync real ids from the sheet and confirm it landed. Match on
+    // the exercise AND the exact sets, so editing a weight isn't "confirmed" by
+    // a stale read that still holds the old numbers.
     reconcile(
-      () => workoutsOn(day).some(r => r.exercise.trim().toLowerCase() === exercise.toLowerCase()),
+      () => workoutsOn(day).some(r =>
+        cleanName(r.exercise).toLowerCase() === exercise.toLowerCase() &&
+        setsToRaw(normaliseSets(r)) === setsRaw),
       verb, renderAll
     );
   } catch (err) {
