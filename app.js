@@ -540,7 +540,7 @@ async function loadData(slotId, onDone) {
   if (cached) { absorb(cached); onDone(); }
 
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" });
+    const res = await fetch(readUrl(), { cache: "no-store" });
     absorb(await res.json());
     saveCache();
     onDone();
@@ -553,6 +553,16 @@ async function loadData(slotId, onDone) {
     }
     onDone();
   }
+}
+
+/* Google caches a published Apps Script GET response by its exact URL for a
+   couple of minutes, so a re-read right after a write returns the *pre-write*
+   snapshot — the change looks like it never saved. `cache:"no-store"` only
+   governs the browser's own cache, not Google's edge cache. A unique query
+   param per read makes every URL distinct, so it always hits the live sheet. */
+function readUrl() {
+  const sep = APPS_SCRIPT_URL.includes("?") ? "&" : "?";
+  return `${APPS_SCRIPT_URL}${sep}_=${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /* Apps Script web apps don't return readable CORS responses to a browser, so
@@ -569,7 +579,7 @@ async function postForm(fields) {
 }
 
 async function refetch() {
-  const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" });
+  const res = await fetch(readUrl(), { cache: "no-store" });
   absorb(await res.json());
   saveCache();
   rebuildIndex();
