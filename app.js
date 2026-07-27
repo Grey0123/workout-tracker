@@ -176,6 +176,41 @@ function toast(msg, kind = "ok", ms = 3200) {
   }, ms);
 }
 
+/* =========================================================================
+   COUNT-UP
+   Animates a stat number from its previously shown value to the new one, so
+   the dashboard figures tick up rather than snapping. It reads the last value
+   off data-v, so a background re-render with unchanged numbers is a no-op (no
+   re-animation), and a sync that *does* change a figure animates just the
+   delta. Honours prefers-reduced-motion. suffix carries markup like the kg tag.
+   ========================================================================= */
+const prefersReducedMotion = () =>
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function countUp(el, target, opts) {
+  if (!el) return;
+  const o = opts || {};
+  const fmt = o.format || (n => String(Math.round(n)));
+  const suffix = o.suffix || "";
+  const to = Number.isFinite(target) ? target : 0;
+  const prev = parseFloat(el.getAttribute("data-v"));
+  const from = Number.isFinite(prev) ? prev : 0;
+  el.setAttribute("data-v", String(to));
+
+  if (from === to || prefersReducedMotion()) {
+    el.innerHTML = fmt(to) + suffix;
+    return;
+  }
+  const dur = 520, t0 = performance.now();
+  const ease = p => 1 - Math.pow(1 - p, 3);
+  (function step(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    el.innerHTML = fmt(from + (to - from) * ease(p)) + suffix;
+    if (p < 1) requestAnimationFrame(step);
+  })(performance.now());
+}
+
 /* ---------- header ---------- */
 function initHeader() {
   const head = document.querySelector(".site-head");
@@ -279,13 +314,17 @@ function calToday(rerender) {
    reveals the per-set breakdown. `actions` adds Edit/Delete for the member
    page; the coach page passes false and gets a read-only list.
    ========================================================================= */
-function activitiesHtml(rows, actions) {
+function activitiesHtml(rows, actions, keyPrefix) {
   if (!rows.length) {
     return `<div class="no-entries">No workout logged for this day.</div>`;
   }
+  // keyPrefix keeps ids unique when the same day is rendered in more than one
+  // place at once (e.g. a recent-session card and the calendar day panel), so
+  // toggling one doesn't flip a hidden copy elsewhere in the DOM.
+  const pre = keyPrefix ? `${keyPrefix}-` : "";
   return rows.map((r, i) => {
     const list = normaliseSets(r);
-    const uid = `act-${esc(r.id || i)}`;
+    const uid = `act-${esc(pre + (r.id || i))}`;
     const perSet = list.map((s, n) => `
       <div class="set-row">
         <span class="set-n">Set ${n + 1}</span>
@@ -303,7 +342,7 @@ function activitiesHtml(rows, actions) {
           <b>${esc(setsSummary(list))}</b>
           <small>${esc(weightSummary(list))}</small>
         </span>
-        <span class="act-caret" aria-hidden="true">⌄</span>
+        <span class="act-caret" aria-hidden="true">▾</span>
       </button>
       <div class="act-body" hidden>
         <div class="set-table">${perSet || `<div class="no-entries">No set detail.</div>`}</div>
@@ -322,6 +361,54 @@ function toggleActivity(uid) {
   if (!el) return;
   const body = el.querySelector(".act-body");
   const head = el.querySelector(".act-head");
+  const open = !body.hidden;
+  body.hidden = open;
+  el.classList.toggle("open", !open);
+  head.setAttribute("aria-expanded", String(!open));
+}
+
+/* =========================================================================
+   SESSION CARD (shared by the member dashboard and the coach page)
+   An accordion: a tidy header (date, exercise count, session totals) collapses
+   the detail. Expanding reveals each exercise as its own nested dropdown, plus
+   meals and a jump-to-calendar button. `scope` namespaces the ids so the same
+   day can appear in two lists at once (e.g. coach's Recent + History).
+   ========================================================================= */
+function sessionCardHtml(k, scope) {
+  const s = scope || "d";
+  const rs = workoutsOn(k);
+  const mc = mealCount(k);
+  const uid = `sess-${s}-${k}`;
+  const meta = [`${setsOf(rs)} sets`, `${Math.round(volumeOf(rs)).toLocaleString()} kg`];
+  if (mc) meta.push(`${mc} meal${mc > 1 ? "s" : ""}`);
+  return `
+    <div class="card session-x" id="${uid}">
+      <button class="sx-head" onclick="toggleSession('${uid}')" aria-expanded="false">
+        <span class="when">${monShort(k)}<b>${dayNum(k)}</b>${dowShort(k)}</span>
+        <span class="sx-info">
+          <span class="sx-title">${rs.length} exercise${rs.length > 1 ? "s" : ""}</span>
+          <span class="sx-meta">${meta.join(" · ")}</span>
+        </span>
+        <span class="sx-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="sx-body" hidden>${sessionPreviewHtml(rs, k, s)}</div>
+    </div>`;
+}
+
+/* Read-only detail inside an expanded session: each exercise is a collapsible
+   activity (tap to see its sets), then the day's meals and a calendar link. */
+function sessionPreviewHtml(rs, k, scope) {
+  const mc = mealCount(k);
+  const mealLine = mc ? `<div class="sx-meals">🍽 ${mc} meal${mc > 1 ? "s" : ""} logged this day</div>` : "";
+  return `${activitiesHtml(rs, false, `${scope || "d"}${k}`)}${mealLine}
+    <button class="btn ghost sm sx-open" onclick="openDay('${k}')">Open day in calendar →</button>`;
+}
+
+function toggleSession(uid) {
+  const el = $(uid);
+  if (!el) return;
+  const body = el.querySelector(".sx-body");
+  const head = el.querySelector(".sx-head");
   const open = !body.hidden;
   body.hidden = open;
   el.classList.toggle("open", !open);
@@ -420,6 +507,7 @@ function lineChart(pts) {
     xlabels += `<text x="${clampX(X(pts.length - 1))}" y="${H - P.b + 20}" text-anchor="middle" font-size="${FS}" fill="var(--muted)">${shortDate(pts[pts.length - 1].d)}</text>`;
   }
 
+  const pathClass = pts.length > 1 ? "pg-line" : "";
   const path = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ");
   const maxV = Math.max(...vs);
   const dots = pts.map((p, i) => {
@@ -431,7 +519,7 @@ function lineChart(pts) {
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Progress chart">
     ${grid}
-    <path d="${path}" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path class="${pathClass}" d="${path}" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}
     ${xlabels}
   </svg>`;

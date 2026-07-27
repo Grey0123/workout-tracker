@@ -175,9 +175,9 @@ function renderDashboard() {
   const days = trainedDays();
   const last = days[days.length - 1];
 
-  $("st-workouts").textContent = weekKeys.filter(k => workoutsOn(k).length).length;
-  $("st-sets").textContent = setsOf(weekRows);
-  $("st-volume").innerHTML = `${Math.round(volumeOf(weekRows)).toLocaleString()}<small> kg</small>`;
+  countUp($("st-workouts"), weekKeys.filter(k => workoutsOn(k).length).length);
+  countUp($("st-sets"), setsOf(weekRows));
+  countUp($("st-volume"), volumeOf(weekRows), { format: n => Math.round(n).toLocaleString(), suffix: "<small> kg</small>" });
   $("st-last").textContent = last ? niceDate(last, { day: "numeric", month: "short" }) : "—";
 
   renderDaystrip();
@@ -222,26 +222,8 @@ function renderRecent() {
   const wrap = $("recent-sessions");
   const days = trainedDays().reverse().slice(0, 6);
   wrap.innerHTML = days.length
-    ? days.map(sessionCard).join("")
+    ? days.map(k => sessionCardHtml(k, "r")).join("")
     : `<div class="card no-entries">No sessions logged yet.</div>`;
-}
-
-function sessionCard(k) {
-  const rows = workoutsOn(k);
-  const chips = rows.map(r => {
-    const list = normaliseSets(r);
-    return `<span class="chip">${esc(r.exercise)} <small>${esc(setsSummary(list))}${
-      weightSummary(list) ? " · " + esc(weightSummary(list)) : ""}</small></span>`;
-  }).join("");
-  const mc = mealCount(k);
-  return `
-    <button class="card session" onclick="openDay('${k}')">
-      <span class="when">${monShort(k)}<b>${dayNum(k)}</b>${dowShort(k)}</span>
-      <span class="what">
-        <span class="chips">${chips}${mc ? `<span class="chip meal">${mc} meal${mc > 1 ? "s" : ""}</span>` : ""}</span>
-        <div class="meta">${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg volume</div>
-      </span>
-    </button>`;
 }
 
 /* ---------- history + date filter ---------- */
@@ -284,7 +266,7 @@ function renderHistory() {
     `${days.length} session${days.length === 1 ? "" : "s"} · ${setsOf(rows)} sets · ${Math.round(volumeOf(rows)).toLocaleString()} kg — ${label}`;
 
   $("history-list").innerHTML = days.length
-    ? days.map(sessionCard).join("")
+    ? days.map(k => sessionCardHtml(k, "h")).join("")
     : `<div class="card no-entries">No workouts logged in this date range.</div>`;
 }
 

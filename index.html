@@ -239,10 +239,10 @@ function renderDashboard() {
   const weekRows = weekKeys.flatMap(k => workoutsOn(k));
   const mk = todayKey().slice(0, 7);
 
-  $("st-workouts").textContent = weekKeys.filter(k => workoutsOn(k).length).length;
-  $("st-sets").textContent = setsOf(weekRows);
-  $("st-volume").innerHTML = `${Math.round(volumeOf(weekRows)).toLocaleString()}<small> kg</small>`;
-  $("st-month").textContent = trainedDays().filter(k => k.startsWith(mk)).length;
+  countUp($("st-workouts"), weekKeys.filter(k => workoutsOn(k).length).length);
+  countUp($("st-sets"), setsOf(weekRows));
+  countUp($("st-volume"), volumeOf(weekRows), { format: n => Math.round(n).toLocaleString(), suffix: "<small> kg</small>" });
+  countUp($("st-month"), trainedDays().filter(k => k.startsWith(mk)).length);
 
   const wrap = $("recent-sessions");
   const days = trainedDays().reverse().slice(0, 6);
@@ -250,67 +250,9 @@ function renderDashboard() {
     wrap.innerHTML = `<div class="card no-entries">No sessions yet — tap a day in the calendar to log your first workout.</div>`;
     return;
   }
-  // Each session is an accordion: a tidy header collapses the detail, tapping
-  // reveals the full per-set breakdown in place. "Open in calendar" is its own
-  // button so the whole card no longer whisks you away with no preview.
-  wrap.innerHTML = days.map(k => {
-    const rs = workoutsOn(k);
-    const mc2 = mealCount(k);
-    const uid = `sess-${k}`;
-    const meta = [`${setsOf(rs)} sets`, `${Math.round(volumeOf(rs)).toLocaleString()} kg`];
-    if (mc2) meta.push(`${mc2} meal${mc2 > 1 ? "s" : ""}`);
-    return `
-      <div class="card session-x" id="${uid}">
-        <button class="sx-head" onclick="toggleSession('${uid}')" aria-expanded="false">
-          <span class="when">${monShort(k)}<b>${dayNum(k)}</b>${dowShort(k)}</span>
-          <span class="sx-info">
-            <span class="sx-title">${rs.length} exercise${rs.length > 1 ? "s" : ""}</span>
-            <span class="sx-meta">${meta.join(" · ")}</span>
-          </span>
-          <span class="act-caret" aria-hidden="true">⌄</span>
-        </button>
-        <div class="sx-body" hidden>${sessionPreviewHtml(rs, k)}</div>
-      </div>`;
-  }).join("");
-}
-
-/* Read-only preview shown inside an expanded session card: every exercise with
-   its sets already visible, plus meals and a jump-to-calendar button. Reuses
-   the activity styles so it matches the day panel. */
-function sessionPreviewHtml(rs, k) {
-  const acts = rs.map(r => {
-    const list = normaliseSets(r);
-    const setRows = list.map((s, n) => `
-      <div class="set-row">
-        <span class="set-n">Set ${n + 1}</span>
-        <span class="set-w">${s.w ? fmtKg(s.w) + " kg" : "—"}</span>
-        <span class="set-r">${s.r ? s.r + " reps" : "—"}</span>
-      </div>`).join("");
-    return `
-      <div class="sx-act">
-        <div class="sx-act-top">
-          <span class="act-name">${esc(r.exercise)}${r.variant ? `<span class="variant"> · ${esc(r.variant)}</span>` : ""}</span>
-          <span class="act-figs"><b>${esc(setsSummary(list))}</b><small>${esc(weightSummary(list))}</small></span>
-        </div>
-        <div class="set-table">${setRows || `<div class="no-entries">No set detail.</div>`}</div>
-        ${r.notes ? `<div class="act-note">${esc(r.notes)}</div>` : ""}
-      </div>`;
-  }).join("");
-  const mc = mealCount(k);
-  const mealLine = mc ? `<div class="sx-meals">🍽 ${mc} meal${mc > 1 ? "s" : ""} logged this day</div>` : "";
-  return `${acts}${mealLine}
-    <button class="btn ghost sm sx-open" onclick="openDay('${k}')">Open day in calendar →</button>`;
-}
-
-function toggleSession(uid) {
-  const el = $(uid);
-  if (!el) return;
-  const body = el.querySelector(".sx-body");
-  const head = el.querySelector(".sx-head");
-  const open = !body.hidden;
-  body.hidden = open;
-  el.classList.toggle("open", !open);
-  head.setAttribute("aria-expanded", String(!open));
+  // Accordion cards (shared with the coach page via sessionCardHtml): a tidy
+  // header, each exercise a nested dropdown, and a dedicated calendar button.
+  wrap.innerHTML = days.map(k => sessionCardHtml(k, "d")).join("");
 }
 
 /* ---------- calendar + day panel ---------- */
