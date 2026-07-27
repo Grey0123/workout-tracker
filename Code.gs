@@ -80,18 +80,26 @@ function pad_(n) { return ("0" + String(parseInt(n, 10))).slice(-2); }
 
 /**
  * Parse the per-set payload the client sends: "60x12;65x10;70x8".
- * Falls back to an empty array; callers then synthesise from the summary.
+ * A set may append "@secs" for a timed hold: "0x0@45" (bodyweight plank) or
+ * "20x0@45" (weighted). Falls back to an empty array; callers then synthesise
+ * from the summary.
  */
 function parseSets_(raw) {
   const out = [];
   String(raw || "").split(";").forEach(function (chunk) {
-    const t = chunk.trim();
+    var t = chunk.trim();
     if (!t) return;
-    const m = t.match(/^(-?[\d.]*)\s*[xX*]\s*(\d*)$/);
-    if (!m) return;
-    const w = parseFloat(m[1]);
-    const r = parseInt(m[2], 10);
-    out.push({ w: isNaN(w) ? 0 : w, r: isNaN(r) ? 0 : r });
+    var secs = 0;
+    var at = t.indexOf("@");
+    if (at > -1) { secs = parseInt(t.substring(at + 1), 10); t = t.substring(0, at); }
+    var w = 0, r = 0;
+    var m = t.match(/^(-?[\d.]*)\s*[xX*]\s*(\d*)$/);
+    if (m) { w = parseFloat(m[1]); r = parseInt(m[2], 10); }
+    if (isNaN(w)) w = 0;
+    if (isNaN(r)) r = 0;
+    if (isNaN(secs)) secs = 0;
+    if (w === 0 && r === 0 && secs === 0) return;   // nothing usable in this chunk
+    out.push({ w: w, r: r, t: secs });
   });
   return out;
 }
@@ -102,7 +110,7 @@ function setsFromSummary_(weight, reps, sets) {
   const count = isNaN(n) || n < 1 ? 1 : n;
   const out = [];
   for (var i = 0; i < count; i++) {
-    out.push({ w: isNaN(w) ? 0 : w, r: isNaN(r) ? 0 : r });
+    out.push({ w: isNaN(w) ? 0 : w, r: isNaN(r) ? 0 : r, t: 0 });
   }
   return out;
 }

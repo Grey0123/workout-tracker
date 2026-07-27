@@ -113,9 +113,13 @@
             </div>
 
             <label>Sets</label>
+            <div class="set-modes">
+              <label class="chk"><input type="checkbox" id="f-bodyweight" onchange="onSetModeChange()"> Bodyweight <span class="opt">(no added weight)</span></label>
+              <label class="chk"><input type="checkbox" id="f-timed" onchange="onSetModeChange()"> Timed <span class="opt">(seconds)</span></label>
+            </div>
             <div class="set-builder" id="set-builder"></div>
             <button type="button" class="sb-add" onclick="addSetRowSmart()">+ Add set</button>
-            <div class="sb-hint">Each set keeps its own weight, so a ramp-up like 60 / 65 / 70 kg is recorded exactly.</div>
+            <div class="sb-hint" id="sb-hint">Each set keeps its own weight, so a ramp-up like 60 / 65 / 70 kg is recorded exactly.</div>
 
             <div class="ffield" style="margin-top:12px">
               <label for="f-notes">Notes <span class="opt">(optional)</span></label>
@@ -310,17 +314,21 @@ function setBuilderRows() {
   return [...$("set-builder").querySelectorAll(".sb-row")];
 }
 
-function addSetRow(w = "", r = "") {
+/* The second input is a "count": reps normally, or seconds when Timed is on.
+   Its value maps to r or t at read time. Weight is hidden when Bodyweight is on. */
+function addSetRow(w = "", c = "") {
   const wrap = $("set-builder");
   const idx = wrap.querySelectorAll(".sb-row").length + 1;
+  const timed = $("f-timed").checked;
   const row = document.createElement("div");
   row.className = "sb-row";
   row.innerHTML = `
     <span class="sb-n">Set ${idx}</span>
     <input type="number" class="sb-w" min="0" step="0.5" inputmode="decimal"
            placeholder="kg" value="${esc(w)}" aria-label="Set ${idx} weight in kg">
-    <input type="number" class="sb-r" min="0" step="1" inputmode="numeric"
-           placeholder="reps" value="${esc(r)}" aria-label="Set ${idx} reps">
+    <input type="number" class="sb-c" min="0" step="1" inputmode="numeric"
+           placeholder="${timed ? "sec" : "reps"}" value="${esc(c)}"
+           aria-label="Set ${idx} ${timed ? "time in seconds" : "reps"}">
     <button type="button" class="sb-del" onclick="removeSetRow(this)" aria-label="Remove set ${idx}">×</button>`;
   wrap.appendChild(row);
   renumberSets();
@@ -333,7 +341,7 @@ function removeSetRow(btn) {
     // Keep one row so the form is never empty; just clear it.
     const row = btn.closest(".sb-row");
     row.querySelector(".sb-w").value = "";
-    row.querySelector(".sb-r").value = "";
+    row.querySelector(".sb-c").value = "";
     return;
   }
   btn.closest(".sb-row").remove();
@@ -341,11 +349,32 @@ function removeSetRow(btn) {
 }
 
 function renumberSets() {
+  const timed = $("f-timed").checked;
   setBuilderRows().forEach((row, i) => {
     row.querySelector(".sb-n").textContent = `Set ${i + 1}`;
     row.querySelector(".sb-w").setAttribute("aria-label", `Set ${i + 1} weight in kg`);
-    row.querySelector(".sb-r").setAttribute("aria-label", `Set ${i + 1} reps`);
+    row.querySelector(".sb-c").setAttribute("aria-label", `Set ${i + 1} ${timed ? "time in seconds" : "reps"}`);
   });
+}
+
+/* Reflect the Bodyweight / Timed checkboxes across the builder: hide the weight
+   column, and switch the count input between reps and seconds. */
+function onSetModeChange() {
+  const bw = $("f-bodyweight").checked;
+  const timed = $("f-timed").checked;
+  const wrap = $("set-builder");
+  wrap.classList.toggle("bw", bw);
+  wrap.classList.toggle("timed", timed);
+  setBuilderRows().forEach(row => {
+    const c = row.querySelector(".sb-c");
+    c.placeholder = timed ? "sec" : "reps";
+  });
+  renumberSets();
+  $("sb-hint").textContent = timed
+    ? "Enter each hold in seconds — e.g. a plank at 45 / 40 / 30 s."
+    : bw
+      ? "Bodyweight sets — just log the reps for each set."
+      : "Each set keeps its own weight, so a ramp-up like 60 / 65 / 70 kg is recorded exactly.";
 }
 
 /* New sets inherit the previous set's numbers — a 3×12 at one weight is then
@@ -354,20 +383,33 @@ function addSetRowSmart() {
   const rows = setBuilderRows();
   const last = rows[rows.length - 1];
   addSetRow(last ? last.querySelector(".sb-w").value : "",
-            last ? last.querySelector(".sb-r").value : "");
+            last ? last.querySelector(".sb-c").value : "");
 }
 
 function readSets() {
-  return setBuilderRows().map(row => ({
-    w: num(row.querySelector(".sb-w").value),
-    r: int(row.querySelector(".sb-r").value),
-  })).filter(s => s.w > 0 || s.r > 0);
+  const bw = $("f-bodyweight").checked;
+  const timed = $("f-timed").checked;
+  return setBuilderRows().map(row => {
+    const w = bw ? 0 : num(row.querySelector(".sb-w").value);
+    const c = int(row.querySelector(".sb-c").value);
+    return timed ? { w, r: 0, t: c } : { w, r: c, t: 0 };
+  }).filter(s => s.w > 0 || s.r > 0 || s.t > 0);
 }
 
+/* Rebuild the form from an existing exercise: infer the mode from its sets so
+   editing a plank reopens in Timed, a bodyweight lift in Bodyweight, etc. */
 function resetSetBuilder(list) {
+  const timed = isTimed(list || []);
+  const bw = isBodyweight(list || []);
+  $("f-timed").checked = timed;
+  $("f-bodyweight").checked = bw;
   $("set-builder").innerHTML = "";
-  if (list && list.length) list.forEach(s => addSetRow(s.w || "", s.r || ""));
-  else { addSetRow(); addSetRow(); addSetRow(); }   // 3 sets is the common case
+  if (list && list.length) {
+    list.forEach(s => addSetRow(bw ? "" : (s.w || ""), timed ? (s.t || "") : (s.r || "")));
+  } else {
+    addSetRow(); addSetRow(); addSetRow();   // 3 sets is the common case
+  }
+  onSetModeChange();
 }
 
 /* ---------- save / edit / delete workout ---------- */
@@ -406,7 +448,7 @@ async function saveWorkout() {
   const st = $("w-status");
 
   if (!exercise) { st.textContent = "Exercise name is required."; st.className = "status err"; return; }
-  if (!sets.length) { st.textContent = "Add at least one set with a weight or reps."; st.className = "status err"; return; }
+  if (!sets.length) { st.textContent = "Add at least one set with reps, time, or weight."; st.className = "status err"; return; }
   if (!isConfigured()) { st.textContent = "Backend not configured — see README."; st.className = "status err"; return; }
 
   const btn = $("btn-save");

@@ -78,42 +78,61 @@ const fmtKg = (v) => Number.isFinite(v) ? (Math.round(v * 10) / 10).toLocaleStri
    the client always sees a setList.
    ========================================================================= */
 
-/** Normalise whatever came back from the sheet into a clean [{w,r}] array. */
+/* A set is {w, r, t}: weight (kg, 0 = bodyweight), reps, and t = hold time in
+   seconds (for planks and other timed holds). Any one of them being positive
+   makes the set count. Legacy rows only had {w, r}; t defaults to 0. */
+
+/** Seconds label: "45s". */
+const fmtSec = (s) => `${int(s)}s`;
+
+/** True when every set is a timed hold (has seconds, no reps). */
+const isTimed = (list) => list.length > 0 && list.every(s => s.t > 0 && !s.r);
+/** True when no set carries any external weight. */
+const isBodyweight = (list) => list.length > 0 && list.every(s => !s.w);
+
+/** Normalise whatever came back from the sheet into a clean [{w,r,t}] array. */
 function normaliseSets(row) {
   let list = Array.isArray(row.setList) ? row.setList : [];
   list = list
-    .map(s => ({ w: num(s && s.w), r: int(s && s.r) }))
-    .filter(s => s.w > 0 || s.r > 0);
+    .map(s => ({ w: num(s && s.w), r: int(s && s.r), t: int(s && s.t) }))
+    .filter(s => s.w > 0 || s.r > 0 || s.t > 0);
   if (!list.length) {
     // Last-resort fallback: rebuild from the summary columns.
     const n = Math.max(1, int(row.sets));
     const w = num(row.weight), r = int(row.reps);
-    if (w > 0 || r > 0) list = Array.from({ length: n }, () => ({ w, r }));
+    if (w > 0 || r > 0) list = Array.from({ length: n }, () => ({ w, r, t: 0 }));
   }
   return list;
 }
 
-/** Wire format for POST: "60x12;65x10;70x8" */
-const setsToRaw = (list) => list.map(s => `${s.w}x${s.r}`).join(";");
+/** Wire format for POST: "60x12;65x10" — timed sets append "@secs": "0x0@45". */
+const setsToRaw = (list) => list.map(s => `${s.w}x${s.r}${s.t ? "@" + s.t : ""}`).join(";");
 
-/** Collapsed label: "3 × 12" — set count by the first set's reps. */
+/** Collapsed label: "3 × 12" reps, or "3 × 45s" for timed holds. */
 function setsSummary(list) {
   if (!list.length) return "";
+  if (isTimed(list)) {
+    const t = list[0].t;
+    const same = list.every(s => s.t === t);
+    return list.length > 1 ? `${list.length} × ${same ? fmtSec(t) : "…"}` : fmtSec(t);
+  }
   const reps = list[0].r;
   const sameReps = list.every(s => s.r === reps);
   return `${list.length} × ${sameReps ? reps : "…"}`;
 }
 
-/** Weight range across the sets, for the collapsed row. */
+/** Weight range across the sets, or "Bodyweight" when nothing's loaded. */
 function weightSummary(list) {
   const ws = list.map(s => s.w).filter(w => w > 0);
-  if (!ws.length) return "";
+  if (!ws.length) return list.length ? "Bodyweight" : "";
   const lo = Math.min(...ws), hi = Math.max(...ws);
   return lo === hi ? `${fmtKg(lo)} kg` : `${fmtKg(lo)}–${fmtKg(hi)} kg`;
 }
 
 const setsVolume = (list) => list.reduce((s, x) => s + x.w * x.r, 0);
 const topWeight  = (list) => list.reduce((m, x) => Math.max(m, x.w), 0);
+const totalReps  = (list) => list.reduce((s, x) => s + (x.r || 0), 0);
+const totalTime  = (list) => list.reduce((s, x) => s + (x.t || 0), 0);
 
 /* ---------- shared state ---------- */
 let WORKOUTS = [];
@@ -325,12 +344,24 @@ function activitiesHtml(rows, actions, keyPrefix) {
   return rows.map((r, i) => {
     const list = normaliseSets(r);
     const uid = `act-${esc(pre + (r.id || i))}`;
-    const perSet = list.map((s, n) => `
+    const perSet = list.map((s, n) => {
+      const rt = [];
+      if (s.r) rt.push(s.r + " reps");
+      if (s.t) rt.push(fmtSec(s.t));
+      return `
       <div class="set-row">
         <span class="set-n">Set ${n + 1}</span>
-        <span class="set-w">${s.w ? fmtKg(s.w) + " kg" : "—"}</span>
-        <span class="set-r">${s.r ? s.r + " reps" : "—"}</span>
-      </div>`).join("");
+        <span class="set-w">${s.w ? fmtKg(s.w) + " kg" : "BW"}</span>
+        <span class="set-r">${rt.join(" · ") || "—"}</span>
+      </div>`;
+    }).join("");
+    const metaBits = [];
+    if (topWeight(list) > 0) {
+      metaBits.push(`Volume ${Math.round(setsVolume(list)).toLocaleString()} kg`);
+      metaBits.push(`top set ${fmtKg(topWeight(list))} kg`);
+    }
+    if (totalReps(list)) metaBits.push(`${totalReps(list)} total reps`);
+    if (totalTime(list)) metaBits.push(`${fmtSec(totalTime(list))} total`);
 
     return `<div class="activity" id="${uid}">
       <button class="act-head" onclick="toggleActivity('${uid}')" aria-expanded="false">
@@ -346,7 +377,7 @@ function activitiesHtml(rows, actions, keyPrefix) {
       </button>
       <div class="act-body" hidden>
         <div class="set-table">${perSet || `<div class="no-entries">No set detail.</div>`}</div>
-        <div class="act-meta">Volume ${Math.round(setsVolume(list)).toLocaleString()} kg · top set ${fmtKg(topWeight(list))} kg</div>
+        ${metaBits.length ? `<div class="act-meta">${metaBits.join(" · ")}</div>` : ""}
         ${actions ? `<div class="act-actions">
           <button class="btn ghost sm" onclick="editActivity('${esc(r.id)}')">Edit</button>
           <button class="btn ghost sm danger" onclick="deleteActivity('${esc(r.id)}')">Delete</button>
