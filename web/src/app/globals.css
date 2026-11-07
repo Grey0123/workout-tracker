@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import "./log.css" layer(components);
+
+/* v1's palette, carried over from its styles.css. The darker text and stripe
+   colours come from the v2 mockups, where v1's tones fail contrast at small sizes. */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --navy: #0b1b33;
+  --navy-2: #132a4a;
+  --blue: #0b63f6;
+  --blue-hi: #3d8bff;
+  --blue-soft: #e8f1fe;
+  --blue-tint: #cfe0fa;
+  --ink: #0b1b33;
+  --muted: #5c6b80;
+  --muted-2: #8494a8;
+  --line: #e2e8f0;
+  --line-soft: #edf1f6;
+  --green-soft: #e4f6ed;
+  --green-ink: #0a6b3d;
+  --amber: #a86304;
+  --amber-soft: #fdf3e2;
+  --amber-ink: #7a4c06;
+  --red: #b4271d;
+  --red-soft: #fdecea;
+  --shadow: 0 1px 2px rgba(11, 27, 51, 0.06), 0 4px 14px rgba(11, 27, 51, 0.05);
+  --shadow-lg: 0 10px 30px rgba(11, 27, 51, 0.12);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-blue: var(--blue);
+  --color-blue-hi: var(--blue-hi);
+  --color-blue-soft: var(--blue-soft);
+  --color-blue-tint: var(--blue-tint);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-ink: var(--amber-ink);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-barlow), "Oswald", sans-serif;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --shadow-card: var(--shadow);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
