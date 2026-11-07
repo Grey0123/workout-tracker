@@ -504,10 +504,57 @@ describe("exercise library", () => {
   });
 
   it("includes every name v1 has logged", async () => {
-    const names = ["Bench Press", "Bicep Curl", "Chest Press", "Lat Pulldown", "Lateral Raise", "Low Row", "Lunge", "Pec Deck Fly",
-      "Plank", "Pull Up", "Reverse Pec Deck Fly", "Seated Row", "Seated Row Machine", "Shoulder Press", "Squat", "Treadmill", "Tricep Pushdown"];
+    const names = ["Assisted Pull Up", "Bench Press", "Bicep Curl", "Chest Press", "Lat Pulldown", "Lateral Raise", "Lunge", "Pec Deck Fly",
+      "Plank", "Pull Up", "Reverse Pec Deck Fly", "Seated Row", "Shoulder Press", "Squat", "Treadmill", "Tricep Pushdown"];
     const found = await rows("select name from public.exercises where not is_custom and name = any($1)", [names]);
     expect(found).toHaveLength(names.length);
+  });
+
+  it("marks only the assisted exercises as assisted", async () => {
+    const assisted = await rows("select name from public.exercises where assisted order by name");
+    expect(assisted.map((r) => r.name)).toEqual(["Assisted Dip", "Assisted Pull Up"]);
+  });
+
+  it("won't mark an exercise assisted without a weight to log", async () => {
+    const owner = await newUser();
+    await as(owner, async () => {
+      await expect(rows(
+        `insert into public.exercises (name, category, kind, inputs, assisted, is_custom, created_by)
+         values ('Helped Hang', 'Back', 'timed', array['duration_s'], true, true, $1)`, [owner])).rejects.toThrow(/assisted_has_weight/);
+    });
+  });
+
+  it("has one Seated Row, with no separate machine rows", async () => {
+    const rowsFound = await rows("select name from public.exercises where not is_custom and name in ('Seated Row', 'Seated Row Machine', 'Low Row')");
+    expect(rowsFound).toEqual([{ name: "Seated Row" }]);
+  });
+
+  it("folds logged machine rows into Seated Row, keeping the machine in the variant", async () => {
+    // A database that already holds rows logged before the merge.
+    const fresh = new PGlite();
+    await fresh.exec(SUPABASE_STUBS);
+    const files = readdirSync(MIGRATIONS).sort();
+    const merge = files.findIndex((f) => f.includes("rows_and_assistance"));
+    for (const file of files.slice(0, merge)) await fresh.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
+
+    const id = (name: string) => `(select id from public.exercises where name = '${name}' and not is_custom)`;
+    await fresh.exec(`
+      insert into auth.users (id, raw_user_meta_data) values ('11111111-1111-4111-8111-111111111111', '{"username":"merge_check","display_name":"M"}');
+      insert into public.sessions (id, user_id, date) values ('22222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111', '2026-07-01');
+      insert into public.session_exercises (session_id, exercise_id, position, variant) values
+        ('22222222-2222-4222-8222-222222222222', ${id("Seated Row")}, 0, null),
+        ('22222222-2222-4222-8222-222222222222', ${id("Seated Row Machine")}, 1, 'Wide grip'),
+        ('22222222-2222-4222-8222-222222222222', ${id("Low Row")}, 2, null);`);
+    for (const file of files.slice(merge)) await fresh.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
+
+    const merged = (await fresh.query<Row>(`
+      select e.name, se.variant from public.session_exercises se join public.exercises e on e.id = se.exercise_id order by se.position`)).rows;
+    expect(merged).toEqual([
+      { name: "Seated Row", variant: null },
+      { name: "Seated Row", variant: "Machine · Wide grip" },
+      { name: "Seated Row", variant: "Low row machine" },
+    ]);
+    await fresh.close();
   });
 
   it("is readable by everyone signed in and can't be changed", async () => {

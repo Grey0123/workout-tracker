@@ -13,34 +13,53 @@ import { createHash } from "node:crypto";
 const SLOTS = ["morning", "afternoon", "evening"];
 const FALLBACK_CATEGORY = "Full body & conditioning";
 
-/** Common misspellings that would otherwise split one lift's history in two. */
+/**
+ * Names that would otherwise split one lift's history in two: misspellings, and
+ * machines that are one exercise in the library. The machine is kept in the variant.
+ */
 const ALIASES = {
-  "chess press": "Chest Press",
-  "lap pulldown": "Lat Pulldown",
-  "peck deck fly": "Pec Deck Fly",
-  "reverse peck deck fly": "Reverse Pec Deck Fly",
+  "chess press": { name: "Chest Press" },
+  "lap pulldown": { name: "Lat Pulldown" },
+  "peck deck fly": { name: "Pec Deck Fly" },
+  "reverse peck deck fly": { name: "Reverse Pec Deck Fly" },
+  "seated row machine": { name: "Seated Row", variant: "Machine" },
+  "low row": { name: "Seated Row", variant: "Low row machine" },
 };
+
+/** v1 had no assisted exercises, so they were logged with "assisted" in the variant or notes. */
+const ASSISTED = {
+  "pull up": "Assisted Pull Up",
+  "pull-up": "Assisted Pull Up",
+  "dip": "Assisted Dip",
+  "chest dip": "Assisted Dip",
+  "tricep dip": "Assisted Dip",
+};
+const ASSISTED_NAMES = new Set(Object.values(ASSISTED).map((n) => n.toLowerCase()));
+const ASSIST_WORD = /\bassist(?:ed|ance)?\b/i;
 
 /** Where common v1 names sort. Anything else is flagged in the report for review. */
 const CATEGORIES = {
+  "assisted dip": "Triceps",
+  "assisted pull up": "Back",
   "bench press": "Chest",
   "bicep curl": "Biceps",
   "chest press": "Chest",
   "lat pulldown": "Back",
   "lateral raise": "Shoulders",
-  "low row": "Back",
   "lunge": "Quads",
   "pec deck fly": "Chest",
   "plank": "Core & abs",
   "pull up": "Back",
   "reverse pec deck fly": "Shoulders",
   "seated row": "Back",
-  "seated row machine": "Back",
   "shoulder press": "Shoulders",
   "squat": "Quads",
   "treadmill": "Cardio",
   "tricep pushdown": "Triceps",
 };
+
+/** A weight typed on a body-weight hold, like a plank, is the person's body weight. */
+const BODY_WEIGHT = { min: 30, max: 300 };
 
 const UNITS = { detik: 1, dtk: 1, sec: 1, secs: 1, second: 1, seconds: 1, menit: 60, mnt: 60, min: 60, mins: 60, minute: 60, minutes: 60 };
 const DURATION = new RegExp(`(?:^|[^\\p{L}\\d])(?:(\\d+)\\s*)?(${Object.keys(UNITS).join("|")})(?![\\p{L}\\d])`, "iu");
@@ -75,40 +94,51 @@ function toTimestamp(v) {
  * with the real time in the notes ("30 detik"), and a later timed set could read
  * 20 seconds with the note "Menit". Only rows with no reps at all qualify, and
  * every change is reported, because this is a best reading of the notes.
+ *
+ * droppedWeight is the weight that was set aside, which on a plank was body weight.
  */
 export function readSets(row) {
   const list = (Array.isArray(row.setList) ? row.setList : [])
     .map((s) => ({ w: toNum(s?.w), r: toInt(s?.r), t: toInt(s?.t) }))
     .filter((s) => s.w || s.r || s.t);
-  if (!list.length || list.some((s) => s.r)) return { sets: list, corrected: false };
+  const unchanged = { sets: list, corrected: false, droppedWeight: 0 };
+  if (!list.length || list.some((s) => s.r)) return unchanged;
 
   const match = clean(row.notes).match(DURATION);
-  if (!match) return { sets: list, corrected: false };
+  if (!match) return unchanged;
 
   const seconds = UNITS[match[2].toLowerCase()];
   if (match[1] && list.every((s) => !s.t)) {
-    return { sets: list.map(() => ({ w: 0, r: 0, t: toInt(match[1]) * seconds })), corrected: true };
+    return {
+      sets: list.map(() => ({ w: 0, r: 0, t: toInt(match[1]) * seconds })),
+      corrected: true,
+      droppedWeight: Math.max(...list.map((s) => s.w)),
+    };
   }
   if (!match[1] && seconds > 1 && list.every((s) => s.t)) {
-    return { sets: list.map((s) => ({ ...s, t: s.t * seconds })), corrected: true };
+    return { sets: list.map((s) => ({ ...s, t: s.t * seconds })), corrected: true, droppedWeight: 0 };
   }
-  return { sets: list, corrected: false };
+  return unchanged;
 }
+
+/** Drops the word "assisted" from a variant once the exercise itself says so. */
+const withoutAssist = (variant) => variant.replace(ASSIST_WORD, "").replace(/^[\s·,;-]+|[\s·,;-]+$/g, "");
 
 const describeSets = (list) => list.map((s) => `${s.w}x${s.r}${s.t ? `@${s.t}s` : ""}`).join(" ");
 
 /**
  * @param data     the v1 payload
  * @param owner    the v2 profile id that receives the data
- * @param existing exercises the owner can already use: [{ id, name, is_custom }]
+ * @param existing exercises the owner can already use: [{ id, name, is_custom, equipment? }]
  */
 export function transform(data, owner, existing = []) {
-  const report = { skipped: [], corrected: [], renamed: [], uncategorised: [], duplicateMeals: [] };
+  const report = { skipped: [], corrected: [], renamed: [], uncategorised: [], duplicateMeals: [], bodyweight: [] };
 
   const known = new Map();
   for (const e of [...existing].sort((a, b) => Number(b.is_custom) - Number(a.is_custom))) {
-    known.set(clean(e.name).toLowerCase(), e.id);   // built-ins last, so they win
+    known.set(clean(e.name).toLowerCase(), e);   // built-ins last, so they win
   }
+  const bodyweight = new Map();
 
   // Group each lift across spellings. Most-used spelling becomes the display name.
   const rows = [];
@@ -121,12 +151,26 @@ export function transform(data, owner, existing = []) {
       continue;
     }
     const alias = ALIASES[typed.toLowerCase()];
-    if (alias) report.renamed.push(`${date}: "${typed}" → "${alias}"`);
-    const name = alias ?? typed;
+    let name = alias?.name ?? typed;
+    let variant = [alias?.variant, clean(row.variant)].filter(Boolean).join(" · ");
+    const { sets, corrected, droppedWeight } = readSets(row);
+
+    const assisted = ASSISTED[name.toLowerCase()];
+    if (assisted && sets.some((s) => s.w) && ASSIST_WORD.test(`${variant} ${clean(row.notes)}`)) {
+      name = assisted;
+      variant = withoutAssist(variant);
+    }
+    if (name !== typed || variant !== clean(row.variant)) {
+      report.renamed.push(`${date}: "${typed}"${row.variant ? ` (${clean(row.variant)})` : ""} → "${name}"${variant ? ` (${variant})` : ""}`);
+    }
+
     const key = name.toLowerCase();
-    const { sets, corrected } = readSets(row);
     if (corrected) {
       report.corrected.push(`${date} ${name}: ${describeSets(readRaw(row))} (note "${clean(row.notes)}") → ${describeSets(sets)}`);
+    }
+    if (droppedWeight >= BODY_WEIGHT.min && droppedWeight <= BODY_WEIGHT.max && known.get(key)?.equipment === "None") {
+      bodyweight.set(date, droppedWeight);
+      report.bodyweight.push(`${date}: ${droppedWeight} kg, typed as the weight on ${name}`);
     }
     if (!sets.length) report.skipped.push(`workout ${row.id ?? "?"} on ${date}: ${name} has no usable sets, kept without any`);
 
@@ -134,7 +178,7 @@ export function transform(data, owner, existing = []) {
     group.spellings.set(name, (group.spellings.get(name) ?? 0) + 1);
     group.sets.push(...sets);
     groups.set(key, group);
-    rows.push({ row, date, key, sets });
+    rows.push({ row, date, key, sets, variant });
   }
 
   const exercises = [];
@@ -142,7 +186,7 @@ export function transform(data, owner, existing = []) {
   for (const [key, group] of groups) {
     const found = known.get(key);
     if (found) {
-      exerciseIds.set(key, found);
+      exerciseIds.set(key, found.id);
       continue;
     }
     const name = [...group.spellings.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
@@ -161,6 +205,7 @@ export function transform(data, owner, existing = []) {
       category: category ?? FALLBACK_CATEGORY,
       kind: "custom",
       inputs: inputs.length ? inputs : ["reps"],
+      assisted: ASSISTED_NAMES.has(key) && inputs.includes("weight_kg"),
       is_custom: true,
       created_by: owner,
     });
@@ -170,7 +215,7 @@ export function transform(data, owner, existing = []) {
   const sessionExercises = [];
   const sets = [];
   const positions = new Map();
-  for (const { row, date, key, sets: list } of rows) {
+  for (const { row, date, key, sets: list, variant } of rows) {
     const sessionId = stableId(owner, "session", date);
     const stamp = toTimestamp(row.timestamp);
     if (!sessions.has(sessionId)) {
@@ -185,7 +230,7 @@ export function transform(data, owner, existing = []) {
       session_id: sessionId,
       exercise_id: exerciseIds.get(key),
       position,
-      variant: clean(row.variant).slice(0, 100) || null,
+      variant: variant.slice(0, 100) || null,
       notes: clean(row.notes).slice(0, 500) || null,
       created_by: owner,
       ...(stamp && { created_at: stamp }),
@@ -236,6 +281,7 @@ export function transform(data, owner, existing = []) {
     sessionExercises,
     sets,
     meals: [...meals.values()],
+    bodyweight: [...bodyweight].map(([date, kg]) => ({ id: stableId(owner, "bodyweight", date), user_id: owner, date, kg })),
     report,
   };
 }

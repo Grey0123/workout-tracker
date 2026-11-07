@@ -18,9 +18,10 @@ const meal = (over = {}) => ({ id: "m1", timestamp: "", date: "2026-07-20", slot
 
 describe("reading sets", () => {
   it("reads a hold typed as weight with the time in the note", () => {
-    const { sets, corrected } = readSets(row({ setList: [{ w: 50, r: 0 }], notes: "30 detik" }));
+    const { sets, corrected, droppedWeight } = readSets(row({ setList: [{ w: 50, r: 0 }], notes: "30 detik" }));
     expect(sets).toEqual([{ w: 0, r: 0, t: 30 }]);
     expect(corrected).toBe(true);
+    expect(droppedWeight).toBe(50);
   });
 
   it("reads minutes", () => {
@@ -84,8 +85,65 @@ describe("transform", () => {
   });
 
   it("doesn't merge lifts that are only similar", () => {
-    const plan = transform({ workouts: [row({ id: "1", exercise: "Seated Row" }), row({ id: "2", exercise: "Low Row" })] }, OWNER);
+    const plan = transform({ workouts: [row({ id: "1", exercise: "Lat Pulldown" }), row({ id: "2", exercise: "Close-Grip Lat Pulldown" })] }, OWNER);
     expect(plan.exercises).toHaveLength(2);
+  });
+
+  it("folds row machines into Seated Row, keeping the machine and any variant", () => {
+    const plan = transform(
+      {
+        workouts: [
+          row({ id: "1", exercise: "Seated Row" }),
+          row({ id: "2", exercise: "Seated Row Machine", variant: "Wide grip" }),
+          row({ id: "3", exercise: "low row" }),
+        ],
+      },
+      OWNER,
+    );
+    expect(plan.exercises.map((e) => e.name)).toEqual(["Seated Row"]);
+    expect(plan.sessionExercises.map((e) => e.variant)).toEqual([null, "Machine · Wide grip", "Low row machine"]);
+    expect(plan.report.renamed).toHaveLength(2);
+  });
+
+  it("turns a pull-up marked assisted into Assisted Pull Up", () => {
+    const plan = transform(
+      {
+        workouts: [
+          row({ id: "1", exercise: "Pull Up", variant: "Assisted", setList: [{ w: 40, r: 8 }] }),
+          row({ id: "2", exercise: "Pull Up", notes: "assist machine, close grip", setList: [{ w: 35, r: 6 }] }),
+          row({ id: "3", exercise: "Pull Up", variant: "Weighted", setList: [{ w: 10, r: 5 }] }),
+          row({ id: "4", exercise: "Pull Up", variant: "Assisted", setList: [{ w: 0, r: 5 }] }),
+        ],
+      },
+      OWNER,
+    );
+    const nameOf = (id: string) => plan.exercises.find((e) => e.id === id)?.name;
+    expect(plan.sessionExercises.map((e) => nameOf(e.exercise_id))).toEqual(["Assisted Pull Up", "Assisted Pull Up", "Pull Up", "Pull Up"]);
+    expect(plan.sessionExercises.map((e) => e.variant)).toEqual([null, null, "Weighted", "Assisted"]);
+    expect(plan.exercises.find((e) => e.name === "Assisted Pull Up")?.assisted).toBe(true);
+  });
+
+  it("reads body weight typed on a body-weight hold, and nowhere else", () => {
+    const library = [
+      { id: "plank", name: "Plank", is_custom: false, equipment: "None" },
+      { id: "carry", name: "Farmer's Carry", is_custom: false, equipment: "Dumbbell" },
+      { id: "tread", name: "Treadmill", is_custom: false, equipment: "Cardio machine" },
+    ];
+    const plan = transform(
+      {
+        workouts: [
+          row({ id: "1", date: "2026-07-01", exercise: "Plank", setList: [{ w: 70, r: 0 }], notes: "30 detik" }),
+          row({ id: "2", date: "2026-07-02", exercise: "Farmer's Carry", setList: [{ w: 70, r: 0 }], notes: "40 detik" }),
+          row({ id: "3", date: "2026-07-03", exercise: "Treadmill", setList: [{ w: 1, r: 0 }], notes: "20 menit" }),
+          row({ id: "4", date: "2026-07-04", exercise: "Plank", setList: [{ w: 5, r: 0 }], notes: "30 detik" }),
+          row({ id: "5", date: "2026-07-05", exercise: "Sandbag Hold", setList: [{ w: 70, r: 0 }], notes: "30 detik" }),
+        ],
+      },
+      OWNER,
+      library,
+    );
+    expect(plan.bodyweight).toEqual([{ id: stableId(OWNER, "bodyweight", "2026-07-01"), user_id: OWNER, date: "2026-07-01", kg: 70 }]);
+    expect(plan.report.bodyweight).toHaveLength(1);
   });
 
   it("uses an existing exercise, preferring a built-in", () => {

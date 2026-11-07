@@ -743,8 +743,10 @@
   text-align: right;
   color: var(--ink);
 }
-.set-r small {
+.set-r small,
+.set-w small {
   color: var(--muted);
+  font-weight: 500;
 }
 .act-meta {
   font-size: 11.5px;

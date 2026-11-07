@@ -75,9 +75,26 @@ export type Exercise = {
   kind: ExerciseKind;
   inputs: Variable[];
   per_side: boolean;
+  /** The weight is the help a machine gives: less is better, and it isn't weight lifted. */
+  assisted: boolean;
   is_custom: boolean;
   created_by: string | null;
 };
+
+/** Offered in the variant box after what the person has written before. */
+export const COMMON_VARIANTS = [
+  "Machine",
+  "Cable",
+  "Dumbbell",
+  "Barbell",
+  "Smith machine",
+  "Single arm",
+  "Close grip",
+  "Wide grip",
+  "Incline",
+  "Decline",
+  "Paused",
+];
 
 export type SetValues = {
   weight_kg: number | null;

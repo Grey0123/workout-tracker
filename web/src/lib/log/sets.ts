@@ -70,17 +70,18 @@ export function setsSummary(sets: SetValues[]): string {
 }
 
 /** The weight range, or what stands in for one. */
-export function weightSummary(sets: SetValues[], kind: ExerciseKind): string {
+export function weightSummary(sets: SetValues[], kind: ExerciseKind, assisted = false): string {
   const weights = sets.map((s) => s.weight_kg ?? 0).filter((w) => w > 0);
   if (weights.length) {
     const lo = Math.min(...weights);
     const hi = Math.max(...weights);
-    return lo === hi ? `${fmtKg(lo)} kg` : `${fmtKg(lo)}–${fmtKg(hi)} kg`;
+    const range = lo === hi ? `${fmtKg(lo)} kg` : `${fmtKg(lo)}–${fmtKg(hi)} kg`;
+    return assisted ? `${range} assist` : range;
   }
   const km = sets.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
   if (km) return `${fmtKg(km)} km`;
   if (kind === "cardio" || kind === "session" || !sets.length) return "";
-  return "Bodyweight";
+  return assisted ? "No assistance" : "Bodyweight";
 }
 
 export const setsVolume = (sets: SetValues[]) => sets.reduce((sum, s) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0);
@@ -89,7 +90,10 @@ export const totalReps = (sets: SetValues[]) => sets.reduce((sum, s) => sum + (s
 export const totalTime = (sets: SetValues[]) => sets.reduce((sum, s) => sum + (s.duration_s ?? 0), 0);
 
 export const entriesSets = (entries: Entry[]) => entries.reduce((sum, e) => sum + setCount(e.sets), 0);
-export const entriesVolume = (entries: Entry[]) => entries.reduce((sum, e) => sum + setsVolume(e.sets), 0);
+
+/** Weight lifted. A machine's assistance isn't, so assisted exercises add nothing. */
+export const entriesVolume = (entries: Entry[], assisted: ReadonlySet<string> = new Set()) =>
+  entries.reduce((sum, e) => sum + (assisted.has(e.exercise_id) ? 0 : setsVolume(e.sets)), 0);
 
 /** The right-hand figures on a set row. */
 export function setDetail(set: SetValues): string {
@@ -196,25 +200,32 @@ export const mealHasContent = (m: Meal | undefined) => !!m && !!(m.description |
 
 /* --------------------------------------------------------------- progress */
 
-export type ProgressMetric = "top" | "e1rm" | "volume" | "time";
+export type ProgressMetric = "top" | "e1rm" | "volume" | "time" | "assist";
 
-export type DayProgress = { date: string; top: number; e1rm: number; volume: number; time: number; longest: number };
+export type DayProgress = { date: string; top: number; e1rm: number; volume: number; time: number; longest: number; assist: number };
 
-/** Per-day figures for one exercise, oldest first. e1RM is Epley, as in v1. */
-export function progressOf(entries: Entry[], exerciseId: string): DayProgress[] {
+/**
+ * Per-day figures for one exercise, oldest first. e1RM is Epley, as in v1. On an
+ * assisted exercise the best set is the one with the least help, and nothing is lifted.
+ */
+export function progressOf(entries: Entry[], exerciseId: string, assisted = false): DayProgress[] {
   const days = new Map<string, DayProgress>();
   for (const entry of entries) {
     if (entry.exercise_id !== exerciseId) continue;
-    const day = days.get(entry.date) ?? { date: entry.date, top: 0, e1rm: 0, volume: 0, time: 0, longest: 0 };
+    const day = days.get(entry.date) ?? { date: entry.date, top: 0, e1rm: 0, volume: 0, time: 0, longest: 0, assist: 0 };
     for (const s of entry.sets) {
       const w = s.weight_kg ?? 0;
       const r = s.reps ?? 0;
-      day.top = Math.max(day.top, w);
-      if (w > 0 && r > 0) day.e1rm = Math.max(day.e1rm, w * (1 + r / 30));
       day.time += s.duration_s ?? 0;
       day.longest = Math.max(day.longest, s.duration_s ?? 0);
+      if (assisted) {
+        if (w > 0) day.assist = day.assist ? Math.min(day.assist, w) : w;
+        continue;
+      }
+      day.top = Math.max(day.top, w);
+      if (w > 0 && r > 0) day.e1rm = Math.max(day.e1rm, w * (1 + r / 30));
     }
-    day.volume += setsVolume(entry.sets);
+    if (!assisted) day.volume += setsVolume(entry.sets);
     days.set(entry.date, day);
   }
   return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -227,6 +238,23 @@ export function loggedExercises(entries: Entry[], exercises: Exercise[]): Exerci
   return exercises
     .filter((e) => uses.has(e.id))
     .sort((a, b) => uses.get(b.id)! - uses.get(a.id)! || a.name.localeCompare(b.name));
+}
+
+/** What the person has written as the variant of this exercise, newest first, then common ones. */
+export function variantSuggestions(entries: Entry[], exerciseId: string | null, common: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (v: string | null) => {
+    const text = v ? cleanName(v) : "";
+    if (text && !seen.has(text.toLowerCase())) {
+      seen.add(text.toLowerCase());
+      out.push(text);
+    }
+  };
+  const mine = entries.filter((e) => e.exercise_id === exerciseId && e.variant).sort((a, b) => b.date.localeCompare(a.date));
+  for (const e of mine) add(e.variant);
+  for (const v of common) add(v);
+  return out;
 }
 
 /** The most recently logged exercises, for the top of the picker. */

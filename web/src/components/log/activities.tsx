@@ -25,10 +25,14 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
   const exercise = exercises.find((e) => e.id === entry.exercise_id);
   const name = exercise?.name ?? "Unknown exercise";
   const kind = exercise?.kind ?? "weighted";
+  const assisted = !!exercise?.assisted;
   const labels = setLabels(entry.sets);
 
   const meta: string[] = [];
-  if (topWeight(entry.sets) > 0) {
+  const helped = entry.sets.map((s) => s.weight_kg ?? 0).filter((w) => w > 0);
+  if (assisted && helped.length) {
+    meta.push(`least assistance ${fmtKg(Math.min(...helped))} kg`);
+  } else if (topWeight(entry.sets) > 0) {
     meta.push(`Volume ${fmtVolume(setsVolume(entry.sets))} kg`, `top set ${fmtKg(topWeight(entry.sets))} kg`);
   }
   if (totalReps(entry.sets)) meta.push(`${totalReps(entry.sets)} total reps`);
@@ -52,7 +56,7 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
         </span>
         <span className="act-figs">
           <b>{setsSummary(entry.sets)}</b>
-          <small>{weightSummary(entry.sets, kind)}</small>
+          <small>{weightSummary(entry.sets, kind, assisted)}</small>
         </span>
         <span className="act-caret" aria-hidden="true">
           ▾
@@ -66,6 +70,7 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
                 <span className="set-n">{labels[i]}</span>
                 <span className="set-w">
                   {set.weight_kg ? `${fmtKg(set.weight_kg)} kg` : kind === "cardio" || kind === "session" ? "" : "BW"}
+                  {set.weight_kg && assisted ? <small> assist</small> : null}
                 </span>
                 <span className="set-r">
                   {setDetail(set)}

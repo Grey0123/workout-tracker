@@ -2,8 +2,19 @@
 
 import { useState, type FormEvent } from "react";
 import { dayMonth } from "@/lib/log/dates";
-import { cleanName, columnsFor, newId, readRows, setLabels, setToRow, TEMPO, timeUnit, type DraftRow } from "@/lib/log/sets";
-import { METRICS, type Entry, type Exercise, type ExerciseKind, type Metric, type Side } from "@/lib/log/types";
+import {
+  cleanName,
+  columnsFor,
+  newId,
+  readRows,
+  setLabels,
+  setToRow,
+  TEMPO,
+  timeUnit,
+  variantSuggestions,
+  type DraftRow,
+} from "@/lib/log/sets";
+import { COMMON_VARIANTS, METRICS, type Entry, type Exercise, type ExerciseKind, type Metric, type Side } from "@/lib/log/types";
 import { CustomExerciseForm } from "./custom-exercise-form";
 import { ExercisePicker, findByName, usePickableExercises } from "./exercise-picker";
 import { useLog } from "./log-provider";
@@ -70,6 +81,8 @@ const HINTS: Record<ExerciseKind, string> = {
   custom: "Each set keeps its own numbers. Time is in seconds or m:ss.",
 };
 
+const ASSISTED_HINT = "Log how much the machine helps. Less help means you're getting stronger.";
+
 const PLACEHOLDERS: Record<Metric, string> = {
   weight_kg: "kg",
   reps: "reps",
@@ -114,6 +127,8 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
 
   const exercise = exercises.find((e) => e.id === draft.exerciseId);
   const kind: ExerciseKind = exercise?.kind ?? "weighted";
+  const assisted = !!exercise?.assisted;
+  const variants = variantSuggestions(entries, draft.exerciseId, COMMON_VARIANTS);
   const update = (change: Partial<Draft>) => setDraft((d) => ({ ...d, ...change }));
   const setRows = (rows: DraftRow[]) => update({ rows });
 
@@ -238,14 +253,21 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
           <label htmlFor="f-variant">
             Variant <span className="opt">(optional)</span>
           </label>
+          {/* Pick one you've used before or a common one, or write your own. */}
           <input
             id="f-variant"
+            list="f-variant-options"
             value={draft.variant}
             maxLength={100}
             autoComplete="off"
-            placeholder="Incline / Dumbbell / Close grip…"
+            placeholder="Which machine, grip or angle"
             onChange={(e) => update({ variant: e.target.value })}
           />
+          <datalist id="f-variant-options">
+            {variants.map((v) => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
         </div>
 
         {showTempo && (
@@ -289,11 +311,13 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
                     placeholder={
                       metric === "duration_s"
                         ? timeUnit(kind)
-                        : metric === "weight_kg" && (kind === "bodyweight" || kind === "timed")
-                          ? "+kg"
-                          : PLACEHOLDERS[metric]
+                        : metric === "weight_kg" && assisted
+                          ? "assist kg"
+                          : metric === "weight_kg" && (kind === "bodyweight" || kind === "timed")
+                            ? "+kg"
+                            : PLACEHOLDERS[metric]
                     }
-                    aria-label={`${labels[i]} ${ARIA[metric]}`}
+                    aria-label={`${labels[i]} ${metric === "weight_kg" && assisted ? "assistance in kg" : ARIA[metric]}`}
                     value={r.values[metric] ?? ""}
                     onChange={(e) => setValue(r.key, metric, e.target.value)}
                   />
@@ -321,7 +345,7 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
         <button type="button" className="sb-add" onClick={addSet}>
           + Add set
         </button>
-        <div className="sb-hint">{HINTS[kind]}</div>
+        <div className="sb-hint">{assisted ? ASSISTED_HINT : HINTS[kind]}</div>
 
         <div className="ffield notes-field">
           <label htmlFor="f-notes">

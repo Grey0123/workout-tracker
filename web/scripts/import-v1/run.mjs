@@ -64,7 +64,7 @@ if (!profile) fail(`No account with the username "${args.username}". Sign up on 
 
 const { data: existing, error: exerciseError } = await db
   .from("exercises")
-  .select("id, name, is_custom")
+  .select("id, name, is_custom, equipment")
   .or(`is_custom.eq.false,created_by.eq.${profile.id}`);
 if (exerciseError) fail(exerciseError.message);
 
@@ -76,7 +76,8 @@ console.log(`  ${plan.sessions.length} training days, ${plan.sessionExercises.le
 console.log(`  ${plan.meals.length} meals, ${plan.meals.filter((m) => m.photoUrl).length} with photos`);
 console.log(`  ${plan.exercises.length} exercises to add to this account, ${plan.reusedExercises} already known`);
 section("Times read from notes, please check", report.corrected);
-section("Names corrected", report.renamed);
+section("Body weight read from a hold, please check", report.bodyweight);
+section("Names changed to match the library", report.renamed);
 section("Exercises with no known muscle group, filed under Full body & conditioning", report.uncategorised);
 section("Duplicate meals", report.duplicateMeals);
 section("Skipped", report.skipped);

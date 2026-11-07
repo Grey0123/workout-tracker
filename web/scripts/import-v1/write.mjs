@@ -54,6 +54,12 @@ export async function writePlan(db, owner, plan, { fetcher = fetch } = {}) {
     meals.push({ ...meal, photo_path });
   }
   await upsert(db, "meals", meals);
+
+  // A weight entered in v2 for the same day wins, so a rerun can't overwrite it.
+  if (plan.bodyweight.length) {
+    const { error } = await db.from("bodyweight").upsert(plan.bodyweight, { onConflict: "user_id,date", ignoreDuplicates: true });
+    if (error) throw new Error(`bodyweight: ${error.message}`);
+  }
   return { photoFailures };
 }
 
@@ -71,6 +77,11 @@ export async function verifyPlan(db, owner, plan) {
   await count("sessions", db.from("sessions").select("id", { count: "exact", head: true }).in("id", sessionIds), plan.sessions.length);
   await count("exercise entries", db.from("session_exercises").select("id", { count: "exact", head: true }).in("session_id", sessionIds), plan.sessionExercises.length);
   await count("meals", db.from("meals").select("id", { count: "exact", head: true }).in("id", plan.meals.map((m) => m.id)), plan.meals.length);
+  await count(
+    "body weight",
+    db.from("bodyweight").select("id", { count: "exact", head: true }).eq("user_id", owner).in("date", plan.bodyweight.map((b) => b.date)),
+    plan.bodyweight.length,
+  );
 
   const { data: stored, error } = await db
     .from("sets")

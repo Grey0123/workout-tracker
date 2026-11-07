@@ -10,6 +10,7 @@ const METRICS: { id: ProgressMetric; label: string; unit: string }[] = [
   { id: "e1rm", label: "Est. 1RM (kg)", unit: "kg" },
   { id: "volume", label: "Session volume (kg)", unit: "kg" },
   { id: "time", label: "Total time", unit: "" },
+  { id: "assist", label: "Assistance (kg), less is better", unit: "kg" },
 ];
 
 const fmtValue = (v: number, metric: ProgressMetric) => (metric === "time" ? fmtTime(Math.round(v)) : `${fmtKg(v)} kg`);
@@ -38,9 +39,10 @@ function LineChart({ days, metric }: { days: DayProgress[]; metric: ProgressMetr
   const MAX_LABELS = narrow ? 4 : 6;
 
   const values = points.map((p) => p.value);
-  const top = Math.max(...values);
+  // The best day gets the filled dot. With assistance, that's the one with the least help.
+  const best = metric === "assist" ? Math.min(...values) : Math.max(...values);
   let min = Math.min(...values);
-  let max = top;
+  let max = Math.max(...values);
   if (min === max) {
     min = Math.max(0, min - 5);
     max += 5;
@@ -59,7 +61,7 @@ function LineChart({ days, metric }: { days: DayProgress[]; metric: ProgressMetr
   const path = points.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="pg-svg" role="img" aria-label={`Trend over ${points.length} sessions, best ${fmtValue(top, metric)}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="pg-svg" role="img" aria-label={`Trend over ${points.length} sessions, best ${fmtValue(best, metric)}`}>
       {[0, 1, 2, 3, 4].map((g) => {
         const v = min + ((max - min) * g) / 4;
         return (
@@ -85,8 +87,8 @@ function LineChart({ days, metric }: { days: DayProgress[]; metric: ProgressMetr
           key={p.date}
           cx={X(i).toFixed(1)}
           cy={Y(p.value).toFixed(1)}
-          r={p.value === top ? 5 : 3.5}
-          fill={p.value === top ? "var(--blue)" : "var(--surface)"}
+          r={p.value === best ? 5 : 3.5}
+          fill={p.value === best ? "var(--blue)" : "var(--surface)"}
           stroke="var(--blue)"
           strokeWidth="2"
         >
@@ -117,12 +119,17 @@ export function ProgressView() {
   const [picks, setPicks] = useState<ProgressMetric>("top");
 
   const exerciseId = logged.some((e) => e.id === picked) ? picked : (logged[0]?.id ?? "");
-  const days = useMemo(() => progressOf(entries, exerciseId), [entries, exerciseId]);
+  const assisted = !!logged.find((e) => e.id === exerciseId)?.assisted;
+  const days = useMemo(() => progressOf(entries, exerciseId, assisted), [entries, exerciseId, assisted]);
 
-  // Only offer what this exercise actually has, so a plank doesn't chart 0 kg.
-  const available = METRICS.filter((m) =>
-    m.id === "time" ? days.some((d) => d.time > 0) : m.id === "e1rm" ? days.some((d) => d.e1rm > 0) : days.some((d) => d.top > 0),
-  );
+  // Only offer what this exercise actually has, so a plank doesn't chart 0 kg. An
+  // assisted exercise charts the help it needed, never as weight lifted.
+  const available = METRICS.filter((m) => {
+    if (m.id === "time") return days.some((d) => d.time > 0);
+    if (m.id === "assist") return assisted && days.some((d) => d.assist > 0);
+    if (m.id === "e1rm") return days.some((d) => d.e1rm > 0);
+    return days.some((d) => d.top > 0);
+  });
   const metric = available.find((m) => m.id === picks)?.id ?? available[0]?.id ?? "top";
 
   if (!logged.length) {
@@ -131,6 +138,7 @@ export function ProgressView() {
 
   const last = days.at(-1)?.date;
   const timeOnly = metric === "time";
+  const helped = days.filter((d) => d.assist > 0);
 
   return (
     <>
@@ -158,7 +166,24 @@ export function ProgressView() {
       </div>
 
       <div className="stats">
-        {timeOnly ? (
+        {metric === "assist" ? (
+          <>
+            <div className="card stat">
+              <div className="num">
+                {fmtKg(Math.min(...helped.map((d) => d.assist)))}
+                <small> kg</small>
+              </div>
+              <div className="lbl">Least assistance</div>
+            </div>
+            <div className="card stat">
+              <div className="num">
+                {fmtKg(helped[0].assist)}
+                <small> kg</small>
+              </div>
+              <div className="lbl">Started at</div>
+            </div>
+          </>
+        ) : timeOnly ? (
           <>
             <div className="card stat">
               <div className="num">{fmtTime(Math.max(...days.map((d) => d.longest)))}</div>

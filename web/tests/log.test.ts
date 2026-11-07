@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { monthGrid, shiftMonth, weekOf } from "../src/lib/log/dates";
 import {
   columnsFor,
+  entriesVolume,
   fmtTime,
   loggedExercises,
   parseTime,
@@ -16,6 +17,7 @@ import {
   setsSummary,
   setsVolume,
   timeInput,
+  variantSuggestions,
   weightSummary,
   type DraftRow,
 } from "../src/lib/log/sets";
@@ -29,7 +31,7 @@ const row = (values: Partial<Record<Metric, string>>, side: Side | null = null, 
 const entry = (over: Partial<Entry>): Entry => ({ id: "e", date: "2026-11-01", exercise_id: "x", position: 0, variant: null, notes: null, tempo: null, sets: [], ...over });
 const exercise = (over: Partial<Exercise>): Exercise => ({
   id: "x", name: "X", category: "Chest", secondary_muscles: [], equipment: null, kind: "weighted", inputs: ["weight_kg", "reps"],
-  per_side: false, is_custom: false, created_by: null, ...over,
+  per_side: false, assisted: false, is_custom: false, created_by: null, ...over,
 });
 
 describe("wording", () => {
@@ -164,6 +166,34 @@ describe("progress", () => {
     expect(days[1].top).toBe(70);
     expect(days[1].volume).toBe(600 + 350 + 300);
     expect(days[1].e1rm).toBeCloseTo(81.67, 2);
+  });
+
+  it("treats assistance as help, not weight lifted", () => {
+    const days = progressOf(
+      [entry({ date: "2026-07-20", sets: [lift(45, 8), lift(55, 6), lift(60, 6)] }), entry({ date: "2026-07-27", sets: [lift(40, 8), set({ reps: 2 })] })],
+      "x",
+      true,
+    );
+    expect(days.map((d) => d.assist)).toEqual([45, 40]);
+    expect(days.map((d) => [d.top, d.e1rm, d.volume])).toEqual([[0, 0, 0], [0, 0, 0]]);
+    expect(weightSummary([lift(45, 8), lift(60, 6)], "weighted", true)).toBe("45–60 kg assist");
+    expect(weightSummary([set({ reps: 5 })], "weighted", true)).toBe("No assistance");
+  });
+
+  it("leaves assisted exercises out of volume lifted", () => {
+    const list = [entry({ exercise_id: "a", sets: [lift(60, 10)] }), entry({ exercise_id: "b", sets: [lift(50, 10)] })];
+    expect(entriesVolume(list)).toBe(1100);
+    expect(entriesVolume(list, new Set(["b"]))).toBe(600);
+  });
+
+  it("suggests variants written before, newest first, then common ones", () => {
+    const list = [
+      entry({ exercise_id: "x", date: "2026-07-01", variant: "Low row machine" }),
+      entry({ exercise_id: "x", date: "2026-07-09", variant: "machine" }),
+      entry({ exercise_id: "y", date: "2026-07-10", variant: "Incline" }),
+    ];
+    expect(variantSuggestions(list, "x", ["Machine", "Cable"])).toEqual(["machine", "Low row machine", "Cable"]);
+    expect(variantSuggestions(list, null, ["Machine"])).toEqual(["Machine"]);
   });
 
   it("tracks time for holds", () => {

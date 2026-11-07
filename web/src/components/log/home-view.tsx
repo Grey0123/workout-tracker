@@ -10,11 +10,11 @@ import { CountUp } from "./count-up";
 import { useLog } from "./log-provider";
 
 function SessionCard({ day }: { day: string }) {
-  const { byDate, mealsByDate, openDay } = useLog();
+  const { byDate, mealsByDate, openDay, assistedIds } = useLog();
   const [open, setOpen] = useState(false);
   const entries = byDate.get(day) ?? [];
   const meals = Object.keys(mealsByDate.get(day) ?? {}).length;
-  const meta = [plural(entriesSets(entries), "set"), `${fmtVolume(entriesVolume(entries))} kg`];
+  const meta = [plural(entriesSets(entries), "set"), `${fmtVolume(entriesVolume(entries, assistedIds))} kg`];
   if (meals) meta.push(plural(meals, "meal"));
 
   return (
@@ -47,7 +47,7 @@ function SessionCard({ day }: { day: string }) {
 }
 
 export function HomeView() {
-  const { byDate, mealsByDate, trainedDays, openDay, profile } = useLog();
+  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds } = useLog();
   const today = todayKey();
   const todayRows = byDate.get(today) ?? [];
   const todayMeals = Object.keys(mealsByDate.get(today) ?? {}).length;
@@ -98,7 +98,7 @@ export function HomeView() {
         </div>
         <div className="card stat">
           <div className="num">
-            <CountUp value={entriesVolume(weekRows)} format={fmtVolume} />
+            <CountUp value={entriesVolume(weekRows, assistedIds)} format={fmtVolume} />
             <small> kg</small>
           </div>
           <div className="lbl">Volume lifted</div>

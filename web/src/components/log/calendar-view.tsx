@@ -84,7 +84,7 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
 }
 
 export function CalendarView() {
-  const { byDate, mealsByDate, selectedDay, selectDay, pane, setPane, deleteEntry, focusForm, clearFocusForm } = useLog();
+  const { byDate, mealsByDate, selectedDay, selectDay, pane, setPane, deleteEntry, focusForm, clearFocusForm, assistedIds } = useLog();
   const [editing, setEditing] = useState<Entry | null>(null);
   const [slot, setSlot] = useState<MealSlot>("morning");
   const [mealVersion, setMealVersion] = useState(0);
@@ -94,7 +94,7 @@ export function CalendarView() {
   const rows = byDate.get(selectedDay) ?? [];
   const meals = Object.keys(mealsByDate.get(selectedDay) ?? {}).length;
   const summary: string[] = [];
-  if (rows.length) summary.push(`${plural(entriesSets(rows), "set")} · ${fmtVolume(entriesVolume(rows))} kg`);
+  if (rows.length) summary.push(`${plural(entriesSets(rows), "set")} · ${fmtVolume(entriesVolume(rows, assistedIds))} kg`);
   if (meals) summary.push(plural(meals, "meal"));
 
   useEffect(() => {

@@ -16,7 +16,7 @@ async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ dat
 }
 
 const SET_COLUMNS = "set_no, weight_kg, reps, duration_s, distance_km, rounds, rpe, calories, tempo, side";
-const EXERCISE_COLUMNS = "id, name, category, secondary_muscles, equipment, kind, inputs, per_side, is_custom, created_by";
+const EXERCISE_COLUMNS = "id, name, category, secondary_muscles, equipment, kind, inputs, per_side, assisted, is_custom, created_by";
 
 type EntryRow = Omit<Entry, "date" | "sets"> & {
   sessions: { date: string };
@@ -126,7 +126,10 @@ export async function saveMeal(
 
 export const deleteMeal = (id: string) => check(createClient().rpc("soft_delete_entry", { p_table: "meals", p_id: id }));
 
-export type ExerciseInput = Pick<Exercise, "name" | "category" | "secondary_muscles" | "equipment" | "kind" | "inputs" | "per_side">;
+export type ExerciseInput = Pick<
+  Exercise,
+  "name" | "category" | "secondary_muscles" | "equipment" | "kind" | "inputs" | "per_side" | "assisted"
+>;
 
 export async function createExercise(userId: string, input: ExerciseInput): Promise<Exercise> {
   const { data, error } = await createClient()

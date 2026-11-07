@@ -31,6 +31,8 @@ type Log = {
   byDate: Map<string, Entry[]>;
   mealsByDate: Map<string, Partial<Record<MealSlot, Meal>>>;
   trainedDays: string[];
+  /** Exercises whose weight is assistance, which volume leaves out. */
+  assistedIds: ReadonlySet<string>;
 
   selectedDay: string;
   month: string;
@@ -267,6 +269,7 @@ export function LogProvider({ children }: { children: ReactNode }) {
       byDate,
       mealsByDate,
       trainedDays: [...byDate.keys()].sort(),
+      assistedIds: new Set(data.exercises.filter((e) => e.assisted).map((e) => e.id)),
       selectedDay,
       month,
       pane,

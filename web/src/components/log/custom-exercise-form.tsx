@@ -2,11 +2,29 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { cleanName, timeUnit } from "@/lib/log/sets";
-import { CATEGORIES, EQUIPMENT, METRICS, PRESETS, VARIABLES, type Exercise, type Variable } from "@/lib/log/types";
+import {
+  CATEGORIES,
+  EQUIPMENT,
+  METRICS,
+  PRESETS,
+  VARIABLES,
+  type Exercise,
+  type ExerciseKind,
+  type Metric,
+  type Variable,
+} from "@/lib/log/types";
 import { findByName, usePickableExercises } from "./exercise-picker";
 import { useLog } from "./log-provider";
 
 const sameVars = (a: Variable[], b: Variable[]) => a.length === b.length && a.every((v) => b.includes(v));
+
+/** What each box in the preview set row says, as the log form will. */
+function previewLabel(metric: Metric, kind: ExerciseKind, assisted: boolean): string {
+  if (metric === "duration_s") return timeUnit(kind);
+  if (metric === "weight_kg" && assisted) return "assist kg";
+  const variable = VARIABLES.find((v) => v.id === metric)!;
+  return variable.unit === "count" ? variable.label.toLowerCase() : variable.unit;
+}
 
 /** Full-screen, as drawn in the mockups. Creates a custom exercise, or edits one when given it. */
 export function CustomExerciseForm({
@@ -35,6 +53,7 @@ export function CustomExerciseForm({
     exercise ? (() => { const i = PRESETS.findIndex((p) => p.kind === exercise.kind && sameVars(p.inputs, exercise.inputs)); return i < 0 ? null : i; })() : 0,
   );
   const [perSide, setPerSide] = useState(exercise?.per_side ?? false);
+  const [assisted, setAssisted] = useState(exercise?.assisted ?? false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -72,6 +91,7 @@ export function CustomExerciseForm({
         kind,
         inputs,
         per_side: perSide,
+        assisted: assisted && inputs.includes("weight_kg"),
       });
       toast(`${exercise ? "Updated" : "Added"}: ${saved.name}`);
       onSaved(saved);
@@ -216,6 +236,15 @@ export function CustomExerciseForm({
               </span>
               <input type="checkbox" role="switch" checked={perSide} onChange={(e) => setPerSide(e.target.checked)} />
             </label>
+            {inputs.includes("weight_kg") && (
+              <label className="cx-side">
+                <span>
+                  <b>The weight is assistance</b>
+                  <small>For assisted machines: less help is better, and it isn&apos;t counted as weight lifted</small>
+                </span>
+                <input type="checkbox" role="switch" checked={assisted} onChange={(e) => setAssisted(e.target.checked)} />
+              </label>
+            )}
           </section>
 
           <section className="card sheet-card" aria-label="Preview of the log form">
@@ -223,7 +252,7 @@ export function CustomExerciseForm({
             <div className="cx-preview">
               <span className="cx-preview-n">Set 1</span>
               {METRICS.filter((m) => inputs.includes(m)).map((m) => (
-                <span key={m}>{m === "duration_s" ? timeUnit(kind) : VARIABLES.find((v) => v.id === m)?.unit === "count" ? VARIABLES.find((v) => v.id === m)?.label.toLowerCase() : VARIABLES.find((v) => v.id === m)?.unit}</span>
+                <span key={m}>{previewLabel(m, kind, assisted)}</span>
               ))}
               {inputs.includes("tempo") && <span>3-1-1-0</span>}
             </div>

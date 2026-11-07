@@ -49,8 +49,9 @@ npm run import:v1 -- --username your_username           # preview, writes nothin
 npm run import:v1 -- --username your_username --write
 ```
 
-The preview lists every correction it would make, such as times read from notes and misspelled
-exercise names. Running the import again is safe: it updates the same rows, and anything you added
+The preview lists every correction it would make, such as times read from notes, misspelled
+exercise names, machines folded into one exercise (the machine goes in the variant), assisted
+pull-ups and dips, and body weight typed as the weight on a plank. Running the import again is safe: it updates the same rows, and anything you added
 in v2 is left alone. Entries deleted in v1 after an earlier run stay in v2 until you remove them.
 
 It only writes to local Supabase unless you also pass `--allow-remote`.
