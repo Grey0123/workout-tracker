@@ -106,7 +106,7 @@ const ARIA: Record<Metric, string> = {
 const TEMPO_HELP = "Four numbers in seconds: lowering, pause at the bottom, lifting, pause at the top. X means as fast as possible.";
 
 export function WorkoutForm({ day, editing, onDone }: { day: string; editing: Entry | null; onDone: () => void }) {
-  const { exercises, entries, saveEntry } = useLog();
+  const { exercises, entries, saveEntry, me } = useLog();
   const pickable = usePickableExercises();
   const [draft, setDraft] = useState(blankDraft);
   const [loaded, setLoaded] = useState<Entry | null>(null);
@@ -242,7 +242,7 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
             onSelect={pick}
             onCustom={(name) => setCustom({ name })}
           />
-          {exercise?.is_custom && (
+          {exercise?.is_custom && exercise.created_by === me.id && (
             <button type="button" className="link-btn" onClick={() => setCustom({ name: "", exercise })}>
               Edit this custom exercise
             </button>

@@ -302,12 +302,17 @@ describe.skipIf(!isLocal || !secret)("real Supabase, running locally", () => {
       expect((await friend.db.storage.from("meal-photos").createSignedUrl(path, 60)).error).not.toBeNull();
     });
 
-    it("can only be uploaded into your own folder, and only as the right type", async () => {
+    it("go into your own folder, or a client's meal photos as their coach, and only as the right type", async () => {
       const owner = await signUp();
       const coach = await signUp("coach");
+      const otherClient = await signUp();
+      const stranger = await signUp();
       await connect(owner, coach, "coach", { share_meals: true, share_meal_photos: true });
+      await connect(otherClient, coach, "coach");
 
-      expect((await coach.db.storage.from("meal-photos").upload(`${owner.id}/x.jpg`, jpeg)).error).not.toBeNull();
+      expect((await coach.db.storage.from("meal-photos").upload(`${owner.id}/x.jpg`, jpeg)).error).toBeNull();
+      expect((await coach.db.storage.from("meal-photos").upload(`${otherClient.id}/x.jpg`, jpeg)).error).not.toBeNull();
+      expect((await stranger.db.storage.from("meal-photos").upload(`${owner.id}/y.jpg`, jpeg)).error).not.toBeNull();
       const script = new Blob(["<script></script>"], { type: "text/html" });
       expect((await owner.db.storage.from("meal-photos").upload(`${owner.id}/x.html`, script)).error).not.toBeNull();
     });

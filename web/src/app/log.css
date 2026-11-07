@@ -110,7 +110,8 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
-.log-app h2.section {
+.log-app h2.section,
+.log-app h1.section {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
@@ -2166,5 +2167,361 @@
   }
   .people-list {
     gap: 12px;
+  }
+}
+
+/* ===================== coach workspace (M4) ===================== */
+.brand-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bell {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bell.active {
+  background: rgba(255, 255, 255, 0.18);
+}
+.bell-count {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.site-head nav.tabs-5 a {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+.by-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: #0b57d9;
+  font-size: 11px;
+  font-weight: 600;
+}
+.slot-body .by-tag {
+  display: table;
+}
+.touched-dot {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--navy);
+}
+.cal-legend .key.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--navy);
+}
+.plan-banner {
+  margin: 0 10px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.plan-banner .field-label {
+  color: var(--blue-tint);
+  margin-bottom: 2px;
+}
+.day-note {
+  margin: 12px 13px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: #3d2a06;
+  font-size: 13.5px;
+}
+.day-note .field-label {
+  color: var(--amber-ink);
+  margin-bottom: 2px;
+}
+.coach-banner {
+  padding: 13px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--blue-soft);
+  border-color: #c9defb;
+}
+.coach-banner-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.coach-banner-text ul,
+.change ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 13px;
+}
+.coach-card,
+.client-access {
+  overflow: hidden;
+}
+.coach-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 15px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.coach-part {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.coach-part:last-child {
+  border-bottom: none;
+}
+.coach-goal {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: pre-line;
+}
+.coach-plan {
+  font-size: 14px;
+  white-space: pre-line;
+}
+.pinned-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pinned-head .link-btn {
+  margin: 0;
+  min-height: 32px;
+}
+.pinned-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.todos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.todo {
+  min-height: 40px;
+}
+.todo.done span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.share-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.share-chip {
+  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 4px 9px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px dashed #c3cdda;
+}
+.share-chip.on {
+  background: var(--green-soft);
+  color: var(--green-ink);
+  border: 1px solid #c4e9d5;
+}
+.changes {
+  display: flex;
+  flex-direction: column;
+}
+.change {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13.5px;
+}
+.change:last-child {
+  border-bottom: none;
+}
+.card.changes .change {
+  padding: 11px 15px;
+}
+.change-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.change-head b {
+  color: var(--ink);
+}
+.change-body {
+  margin-top: 2px;
+}
+.change-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.change-foot .link-btn {
+  margin: 0;
+}
+.change.unread {
+  box-shadow: inset 3px 0 0 var(--blue);
+  background: var(--blue-soft);
+}
+.undo-btn {
+  margin-top: 8px;
+}
+.page-heading {
+  margin-top: 0;
+}
+.client-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 15px;
+  color: inherit;
+  text-decoration: none;
+}
+.client-card:hover {
+  border-color: var(--blue);
+}
+.client-card .pill {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+.client-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.client-stats div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.client-stats b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.client-stats small {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.note-form {
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.note-form .ffield {
+  margin-bottom: 0;
+}
+.note-kinds {
+  display: grid;
+  gap: 6px;
+}
+.note-cancel {
+  margin-top: -2px;
+}
+.note-filter {
+  margin-bottom: 12px;
+}
+.note-filter button {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.note {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.note p {
+  font-size: 14px;
+  white-space: pre-line;
+}
+.note-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.note-kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.note-kind.private {
+  background: var(--navy);
+  color: #fff;
+}
+.note-done {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.note-done.done {
+  color: var(--green-ink);
+}
+.disclaimer-line {
+  margin-top: 14px;
+}
+.shared-tabs.four {
+  grid-template-columns: repeat(4, 1fr);
+}
+.shared-tabs.four a {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+@media (min-width: 641px) {
+  .site-head nav.tabs-5 a {
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    padding-left: 20px;
+    padding-right: 20px;
   }
 }

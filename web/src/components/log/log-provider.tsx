@@ -6,6 +6,7 @@ import * as api from "@/lib/log/api";
 import { shiftMonth, todayKey } from "@/lib/log/dates";
 import { mealHasContent, newId } from "@/lib/log/sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile } from "@/lib/log/types";
+import type { Note } from "@/lib/coach/api";
 import type { Connection } from "@/lib/people/types";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { SetupNotice } from "@/components/setup-notice";
@@ -32,12 +33,23 @@ type Log = {
   me: Profile;
   /** How the log was shared with me, or null when it's my own. */
   connection: Connection | null;
-  /** Someone else's log can only be looked at, for now. */
+  /** True for my own log. */
+  isOwn: boolean;
+  /** A friend's log, which can only be looked at. */
   readOnly: boolean;
+  /** What I may do here: everything in my own log, what the access level allows as a coach. */
+  can: { workouts: boolean; meals: boolean; delete: boolean };
   /** Where this log's screens live: "" for my own, "/u/name" for a shared one. */
   basePath: string;
   shares: { workouts: boolean; meals: boolean; mealPhotos: boolean };
   people: api.PeopleCounts;
+  notes: Note[];
+  coach: api.LogData["coach"];
+  /** "You", "Coach Andi", a name, or "Someone else" for who added or changed something. */
+  actorLabel: (id: string | null | undefined) => string;
+  /** Fetches the log again, after an undo for instance. */
+  reload: () => void;
+  setNotes: (change: (notes: Note[]) => Note[]) => void;
   exercises: Exercise[];
   entries: Entry[];
   meals: Meal[];
@@ -141,15 +153,29 @@ export function LogProvider({ username, children }: { username?: string; childre
   }, []);
 
   const userId = data?.profile.id ?? "";
+  const meId = data?.me.id ?? "";
+
+  const setNotes = useCallback((change: (notes: Note[]) => Note[]) => {
+    setData((d) => (d ? { ...d, notes: change(d.notes) } : d));
+  }, []);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   const saveEntry = useCallback(
     async (entry: Entry, label: string) => {
       const previous = data?.entries.find((e) => e.id === entry.id);
-      const shown = { ...entry, saving: true };
+      // Stamped the way the database will, so "Edited by" shows straight away.
+      const stamped = {
+        ...entry,
+        session_id: previous?.session_id,
+        created_by: previous ? previous.created_by : meId,
+        updated_by: meId,
+        updated_at: new Date().toISOString(),
+      };
+      const shown = { ...stamped, saving: true };
       setEntries((entries) => (previous ? entries.map((e) => (e.id === entry.id ? shown : e)) : [...entries, shown]));
       try {
         await enqueue(() => api.saveEntry(userId, entry));
-        setEntries((entries) => entries.map((e) => (e.id === entry.id ? entry : e)));
+        setEntries((entries) => entries.map((e) => (e.id === entry.id ? stamped : e)));
         toast(`${previous ? "Updated" : "Saved"}: ${label}`);
         return true;
       } catch (err) {
@@ -161,7 +187,7 @@ export function LogProvider({ username, children }: { username?: string; childre
         return false;
       }
     },
-    [data, enqueue, setEntries, toast, userId],
+    [data, enqueue, setEntries, toast, userId, meId],
   );
 
   const deleteEntry = useCallback(
@@ -191,6 +217,9 @@ export function LogProvider({ username, children }: { username?: string; childre
         notes: input.notes,
         photo_path: input.keepPhotoPath,
         photo_preview: input.photoPreview ?? undefined,
+        created_by: previous ? previous.created_by : meId,
+        updated_by: meId,
+        updated_at: new Date().toISOString(),
         saving: true,
       };
       setMeals((meals) => [...meals.filter((m) => !isSlot(m)), shown]);
@@ -210,12 +239,23 @@ export function LogProvider({ username, children }: { username?: string; childre
         const photo_path = uploaded ?? input.keepPhotoPath;
         setMeals((meals) => meals.map((m) =>
           isSlot(m)
-            ? { id, date: input.date, slot: input.slot, description: input.description, notes: input.notes, photo_path }
+            ? {
+                id,
+                date: input.date,
+                slot: input.slot,
+                description: input.description,
+                notes: input.notes,
+                photo_path,
+                created_by: previous ? previous.created_by : meId,
+                updated_by: meId,
+                updated_at: shown.updated_at,
+              }
             : m,
         ));
         // Removing a photo should really remove it, not just unlink it.
         const old = previous?.photo_path;
-        if (old && old !== photo_path) api.removePhoto(old).catch(console.error);
+        // A coach can add to a client's photos but not remove them.
+        if (old && old !== photo_path && !data?.connection) api.removePhoto(old).catch(console.error);
         toast(`Saved: ${input.slot} meal`);
         return true;
       } catch (err) {
@@ -226,7 +266,7 @@ export function LogProvider({ username, children }: { username?: string; childre
         return false;
       }
     },
-    [data, enqueue, setMeals, toast, userId],
+    [data, enqueue, setMeals, toast, userId, meId],
   );
 
   const deleteMeal = useCallback(
@@ -246,11 +286,12 @@ export function LogProvider({ username, children }: { username?: string; childre
 
   const saveExercise = useCallback(
     async (id: string | null, input: api.ExerciseInput) => {
-      const saved = id ? await api.updateExercise(id, input) : await api.createExercise(userId, input);
+      // A coach's custom exercises are their own, usable for every client.
+      const saved = id ? await api.updateExercise(id, input) : await api.createExercise(meId, input);
       setData((d) => d && { ...d, exercises: [...d.exercises.filter((e) => e.id !== saved.id), saved] });
       return saved;
     },
-    [userId],
+    [meId],
   );
 
   const selectDay = useCallback((day: string) => {
@@ -284,7 +325,23 @@ export function LogProvider({ username, children }: { username?: string; childre
     const c = data.connection;
     return {
       ...data,
-      readOnly: !!c,
+      isOwn: !c,
+      readOnly: !!c && c.kind !== "coach",
+      can: {
+        workouts: !c || (c.kind === "coach" && c.share_workouts),
+        meals: !c || (c.kind === "coach" && c.share_meals),
+        delete: !c || (c.kind === "coach" && c.coach_access === "full"),
+      },
+      actorLabel: (id) => {
+        if (!id) return "Someone else";
+        if (id === data.me.id) return "You";
+        if (id === data.profile.id) return data.profile.display_name;
+        const person = data.actors.find((p) => p.id === id);
+        if (!person) return "Someone else";
+        return person.account_type === "coach" ? `Coach ${person.display_name}` : person.display_name;
+      },
+      reload,
+      setNotes,
       basePath: c ? `/u/${data.profile.username}` : "",
       shares: { workouts: !c || c.share_workouts, meals: !c || c.share_meals, mealPhotos: !c || c.share_meal_photos },
       byDate,
@@ -308,7 +365,7 @@ export function LogProvider({ username, children }: { username?: string; childre
       saveExercise,
       toast,
     };
-  }, [data, selectedDay, month, pane, focusForm, clearFocusForm, selectDay, showMonth, showToday, openDay, saveEntry, deleteEntry, saveMeal, deleteMeal, saveExercise, toast]);
+  }, [data, selectedDay, month, pane, focusForm, clearFocusForm, selectDay, showMonth, showToday, openDay, saveEntry, deleteEntry, saveMeal, deleteMeal, saveExercise, toast, reload, setNotes]);
 
   let body: ReactNode;
   if (!configured) body = <SetupNotice />;

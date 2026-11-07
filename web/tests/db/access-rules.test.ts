@@ -717,13 +717,16 @@ describe("storage", () => {
     await as(friend, async () => { expect(await seen(photo)).toBe(0); expect(await seen(video)).toBe(0); });
   });
 
-  it("only lets you upload into your own folder", async () => {
+  it("only lets you upload into your own folder, and a coach into a client's meal photos", async () => {
     const owner = await newUser();
     const coach = await newUser("coach");
+    const stranger = await newUser();
     await connect(owner, coach, "coach", { share_meals: true, share_meal_photos: true });
     await as(coach, async () => {
-      await expect(rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${owner}/x.jpg`])).rejects.toThrow(/row-level security/);
       await rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${coach}/x.jpg`]);
+      await rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${owner}/x.jpg`]);
+      await expect(rows("insert into storage.objects (bucket_id, name) values ('workout-media', $1)", [`${owner}/x.mp4`])).rejects.toThrow(/row-level security/);
+      await expect(rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${stranger}/x.jpg`])).rejects.toThrow(/row-level security/);
     });
   });
 

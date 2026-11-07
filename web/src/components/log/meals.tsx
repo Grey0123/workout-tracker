@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import { photoLink, resizePhoto } from "@/lib/log/api";
 import { dayMonth } from "@/lib/log/dates";
 import { MEAL_SLOTS, type Meal, type MealSlot } from "@/lib/log/types";
+import { useByLine } from "./activities";
 import { useLog } from "./log-provider";
 
 /** A private photo, shown through a short-lived link. */
@@ -34,12 +35,28 @@ export function MealPhoto({ path, preview, className = "meal-photo" }: { path: s
   return <img className={className} src={url} alt="Meal photo" loading="lazy" />;
 }
 
-export function MealsList({ day, onPick, onDeleted }: { day: string; onPick: (slot: MealSlot) => void; onDeleted: () => void }) {
-  const { mealsByDate, deleteMeal, readOnly, shares } = useLog();
+function MealByLine({ meal }: { meal: Meal }) {
+  const line = useByLine(meal);
+  return line ? <span className="by-tag">{line}</span> : null;
+}
+
+export function MealsList({
+  day,
+  onPick,
+  onDeleted,
+  onHistory,
+}: {
+  day: string;
+  onPick: (slot: MealSlot) => void;
+  onDeleted: () => void;
+  onHistory?: (meal: Meal) => void;
+}) {
+  const { mealsByDate, deleteMeal, readOnly, shares, can, isOwn, profile } = useLog();
   const meals = mealsByDate.get(day) ?? {};
 
   const remove = (meal: Meal) => {
-    if (!confirm(`Delete your ${meal.slot} meal on ${dayMonth(day)}?`)) return;
+    const whose = isOwn ? "your" : `${profile.display_name}'s`;
+    if (!confirm(`Delete ${whose} ${meal.slot} meal on ${dayMonth(day)}?`)) return;
     deleteMeal(meal);
     onDeleted();
   };
@@ -59,6 +76,7 @@ export function MealsList({ day, onPick, onDeleted }: { day: string; onPick: (sl
                   {shares.mealPhotos && (meal.photo_path || meal.photo_preview) && (
                     <MealPhoto path={meal.photo_path} preview={meal.photo_preview} />
                   )}
+                  <MealByLine meal={meal} />
                   {meal.saving && <span className="act-saving">Saving…</span>}
                 </>
               ) : (
@@ -68,18 +86,29 @@ export function MealsList({ day, onPick, onDeleted }: { day: string; onPick: (sl
             {readOnly ? null : meal ? (
               !meal.saving && (
                 <span className="slot-btns">
-                  <button type="button" className="btn ghost sm" aria-label={`Edit ${slot} meal`} onClick={() => onPick(slot)}>
-                    Edit
-                  </button>
-                  <button type="button" className="btn ghost sm danger" aria-label={`Delete ${slot} meal`} onClick={() => remove(meal)}>
-                    Delete
-                  </button>
+                  {can.meals && (
+                    <button type="button" className="btn ghost sm" aria-label={`Edit ${slot} meal`} onClick={() => onPick(slot)}>
+                      Edit
+                    </button>
+                  )}
+                  {onHistory && (
+                    <button type="button" className="btn ghost sm" aria-label={`History of ${slot} meal`} onClick={() => onHistory(meal)}>
+                      History
+                    </button>
+                  )}
+                  {can.delete && (
+                    <button type="button" className="btn ghost sm danger" aria-label={`Delete ${slot} meal`} onClick={() => remove(meal)}>
+                      Delete
+                    </button>
+                  )}
                 </span>
               )
             ) : (
-              <button type="button" className="btn ghost sm slot-add" aria-label={`Add ${slot} meal`} onClick={() => onPick(slot)}>
-                Add
-              </button>
+              can.meals && (
+                <button type="button" className="btn ghost sm slot-add" aria-label={`Add ${slot} meal`} onClick={() => onPick(slot)}>
+                  Add
+                </button>
+              )
             )}
           </div>
         );

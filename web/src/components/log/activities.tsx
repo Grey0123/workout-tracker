@@ -19,8 +19,28 @@ import { useLog } from "./log-provider";
 
 const TEMPO_HELP = "Seconds: lowering · pause at the bottom · lifting · pause at the top. X means as fast as possible.";
 
-function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: Entry) => void; onDelete?: (entry: Entry, name: string) => void }) {
+type Handlers = {
+  onEdit?: (entry: Entry) => void;
+  onDelete?: (entry: Entry, name: string) => void;
+  onHistory?: (entry: Entry, name: string) => void;
+};
+
+/** PRD 5.3: entries say who added or last edited them, when that wasn't the owner. */
+export function useByLine(row: { created_by?: string | null; updated_by?: string | null; updated_at?: string }): string | null {
+  const { profile, actorLabel } = useLog();
+  const added = row.created_by && row.created_by !== profile.id;
+  const edited = row.updated_by && row.updated_by !== profile.id && row.updated_by !== row.created_by;
+  if (edited) {
+    const at = row.updated_at ? new Date(row.updated_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    return `Edited by ${actorLabel(row.updated_by)}${at ? ` · ${at}` : ""}`;
+  }
+  if (added) return `Added by ${actorLabel(row.created_by)}`;
+  return null;
+}
+
+function Activity({ entry, onEdit, onDelete, onHistory }: { entry: Entry } & Handlers) {
   const { exercises } = useLog();
+  const byLine = useByLine(entry);
   const [open, setOpen] = useState(false);
   const exercise = exercises.find((e) => e.id === entry.exercise_id);
   const name = exercise?.name ?? "Unknown exercise";
@@ -52,6 +72,7 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
             </span>
           )}
           {entry.notes && <span className="act-note">{entry.notes}</span>}
+          {byLine && <span className="by-tag">{byLine}</span>}
           {entry.saving && <span className="act-saving">Saving…</span>}
         </span>
         <span className="act-figs">
@@ -80,14 +101,23 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
             ))}
           </div>
           {meta.length > 0 && <div className="act-meta">{meta.join(" · ")}</div>}
-          {onEdit && onDelete && !entry.saving && (
+          {(onEdit || onDelete || onHistory) && !entry.saving && (
             <div className="act-actions">
-              <button type="button" className="btn ghost sm" onClick={() => onEdit(entry)}>
-                Edit
-              </button>
-              <button type="button" className="btn ghost sm danger" onClick={() => onDelete(entry, name)}>
-                Delete
-              </button>
+              {onEdit && (
+                <button type="button" className="btn ghost sm" onClick={() => onEdit(entry)}>
+                  Edit
+                </button>
+              )}
+              {onHistory && (
+                <button type="button" className="btn ghost sm" onClick={() => onHistory(entry, name)}>
+                  History
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" className="btn ghost sm danger" onClick={() => onDelete(entry, name)}>
+                  Delete
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -96,21 +126,13 @@ function Activity({ entry, onEdit, onDelete }: { entry: Entry; onEdit?: (entry: 
   );
 }
 
-/** A day's exercises. Without onEdit and onDelete the list is read-only. */
-export function Activities({
-  entries,
-  onEdit,
-  onDelete,
-}: {
-  entries: Entry[];
-  onEdit?: (entry: Entry) => void;
-  onDelete?: (entry: Entry, name: string) => void;
-}) {
+/** A day's exercises. Without handlers the list is read-only. */
+export function Activities({ entries, ...handlers }: { entries: Entry[] } & Handlers) {
   if (!entries.length) return <div className="no-entries">No workout logged for this day.</div>;
   return (
     <>
       {entries.map((entry) => (
-        <Activity key={entry.id} entry={entry} onEdit={onEdit} onDelete={onDelete} />
+        <Activity key={entry.id} entry={entry} {...handlers} />
       ))}
     </>
   );

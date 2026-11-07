@@ -5,6 +5,8 @@ import { useState } from "react";
 import { SignOutButton } from "@/components/auth-form";
 import { dateOf, longDate, niceDate, todayKey, weekOf } from "@/lib/log/dates";
 import { entriesSets, entriesVolume, fmtVolume, plural } from "@/lib/log/sets";
+import { CoachChangeBanner, CoachCard } from "@/components/coach/coach-home";
+import { CoachPanel } from "@/components/coach/coach-panel";
 import { Activities } from "./activities";
 import { CountUp } from "./count-up";
 import { useLog } from "./log-provider";
@@ -47,7 +49,7 @@ function SessionCard({ day }: { day: string }) {
 }
 
 export function HomeView() {
-  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds, readOnly, shares, people } = useLog();
+  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds, isOwn, connection, shares, people } = useLog();
   const today = todayKey();
   const todayRows = byDate.get(today) ?? [];
   const todayMeals = Object.keys(mealsByDate.get(today) ?? {}).length;
@@ -60,6 +62,8 @@ export function HomeView() {
 
   return (
     <>
+      {isOwn && <CoachChangeBanner />}
+      {connection?.kind === "coach" && <CoachPanel />}
       <section className="card today-bar" aria-label="Today">
         <div className="grow">
           <h1 className="date">{longDate(today)}</h1>
@@ -73,7 +77,7 @@ export function HomeView() {
               </span>
             )}
           </div>
-          {!readOnly && (
+          {isOwn && (
             // PRD 5.2: you always know who can see your log.
             <div className="top">
               <Link href="/people" className="pill link-pill">
@@ -89,7 +93,7 @@ export function HomeView() {
             </div>
           )}
         </div>
-        {!readOnly && (
+        {isOwn && (
           <div className="today-actions">
             <Link href="/calendar" className="btn" onClick={() => openDay(today, "workout")}>
               Log workout
@@ -100,6 +104,8 @@ export function HomeView() {
           </div>
         )}
       </section>
+
+      {isOwn && <CoachCard />}
 
       <h2 className="section">This week</h2>
       <div className="stats">
@@ -136,7 +142,7 @@ export function HomeView() {
           recent.map((day) => <SessionCard key={day} day={day} />)
         ) : (
           <div className="card no-entries">
-            {readOnly
+            {!isOwn
               ? shares.workouts
                 ? `${profile.display_name} hasn't logged a session yet.`
                 : `${profile.display_name} isn't sharing workouts with you.`
@@ -145,7 +151,7 @@ export function HomeView() {
         )}
       </div>
 
-      {!readOnly && (
+      {isOwn && (
         <>
           <h2 className="section">Account</h2>
           <section className="card account">

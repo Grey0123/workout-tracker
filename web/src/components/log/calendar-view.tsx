@@ -1,17 +1,40 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { dateOf, longDate, monthGrid, niceDate, panelDate, sameMonth, todayKey } from "@/lib/log/dates";
+import { dateOf, dayMonth, longDate, monthGrid, niceDate, panelDate, sameMonth, todayKey } from "@/lib/log/dates";
 import { entriesSets, entriesVolume, fmtVolume, plural } from "@/lib/log/sets";
 import type { Entry, MealSlot } from "@/lib/log/types";
+import { HistoryDialog, type HistoryTarget } from "@/components/coach/history-dialog";
+import * as coach from "@/lib/coach/api";
 import { Activities } from "./activities";
 import { useLog } from "./log-provider";
 import { MealForm, MealsList } from "./meals";
 import { WorkoutForm } from "./workout-form";
 
+/** The coach's plan for the week holding the selected day (design: pinned on the calendar). */
+function PlanBanner() {
+  const { notes, selectedDay, actorLabel } = useLog();
+  const plan = coach.planFor(notes, selectedDay);
+  if (!plan) return null;
+  return (
+    <div className="plan-banner">
+      <div className="field-label">
+        {actorLabel(plan.coach_id) === "You" ? "Your plan" : `${actorLabel(plan.coach_id)}'s plan`} · week of {dayMonth(plan.week_start!)}
+      </div>
+      <div>{plan.body}</div>
+    </div>
+  );
+}
+
 function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
-  const { byDate, mealsByDate, selectedDay, month, showMonth, showToday } = useLog();
+  const { byDate, mealsByDate, selectedDay, month, showMonth, showToday, profile, entries, meals: allMeals, isOwn } = useLog();
   const today = todayKey();
+  // Days someone other than the owner added to or changed (design: a dot on the day).
+  const touched = new Set(
+    [...entries, ...allMeals]
+      .filter((r) => (r.created_by && r.created_by !== profile.id) || (r.updated_by && r.updated_by !== profile.id))
+      .map((r) => r.date),
+  );
 
   return (
     <div className="card cal-card">
@@ -57,6 +80,7 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
               onClick={() => onPick(day)}
             >
               <span className="dnum">{dateOf(day).getDate()}</span>
+              {touched.has(day) && <span className="touched-dot" title="Changed by someone else" />}
               <span className="stripes">
                 {rows.length > 0 && <span className="stripe work">{sets}</span>}
                 {meals > 0 && <span className="stripe food">{meals}</span>}
@@ -78,7 +102,14 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
           <span className="key food" />
           meals logged
         </span>
+        {touched.size > 0 && (
+          <span>
+            <span className="key dot" />
+            changed by {isOwn ? "your coach" : "someone else"}
+          </span>
+        )}
       </div>
+      <PlanBanner />
     </div>
   );
 }
@@ -95,10 +126,15 @@ export function CalendarView() {
     focusForm,
     clearFocusForm,
     assistedIds,
-    readOnly,
     shares,
     profile,
+    can,
+    readOnly,
+    notes,
+    actorLabel,
   } = useLog();
+  const [history, setHistory] = useState<HistoryTarget | null>(null);
+  const dayNotes = notes.filter((n) => n.kind === "day" && n.date === selectedDay);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [slot, setSlot] = useState<MealSlot>("morning");
   const [mealVersion, setMealVersion] = useState(0);
@@ -151,6 +187,13 @@ export function CalendarView() {
           <span className="sub">{summary.join(" · ") || "nothing logged yet"}</span>
         </h2>
 
+        {dayNotes.map((n) => (
+          <div className="day-note" key={n.id}>
+            <div className="field-label">Day note · {actorLabel(n.coach_id)}</div>
+            <div>{n.body}</div>
+          </div>
+        ))}
+
         <div className="day-toggle" role="tablist" aria-label="Day contents">
           <button type="button" role="tab" aria-selected={pane === "workout"} className={pane === "workout" ? "active" : ""} onClick={() => setPane("workout")}>
             Workout<span className="count">{rows.length}</span>
@@ -164,12 +207,17 @@ export function CalendarView() {
           <div role="tabpanel">
             {shares.workouts ? (
               <div className="entries">
-                <Activities entries={rows} onEdit={readOnly ? undefined : edit} onDelete={readOnly ? undefined : remove} />
+                <Activities
+                  entries={rows}
+                  onEdit={can.workouts ? edit : undefined}
+                  onDelete={can.delete ? remove : undefined}
+                  onHistory={readOnly ? undefined : (entry, name) => setHistory({ table: "session_exercises", id: entry.id, title: name })}
+                />
               </div>
             ) : (
               <div className="no-entries">{profile.display_name} isn&apos;t sharing workouts with you.</div>
             )}
-            {!readOnly && (
+            {can.workouts && (
               <div ref={form}>
                 <WorkoutForm key={selectedDay} day={selectedDay} editing={editing} onDone={() => setEditing(null)} />
               </div>
@@ -178,11 +226,16 @@ export function CalendarView() {
         ) : (
           <div role="tabpanel">
             {shares.meals ? (
-              <MealsList day={selectedDay} onPick={pickSlot} onDeleted={() => setMealVersion((n) => n + 1)} />
+              <MealsList
+                day={selectedDay}
+                onPick={pickSlot}
+                onDeleted={() => setMealVersion((n) => n + 1)}
+                onHistory={readOnly ? undefined : (meal) => setHistory({ table: "meals", id: meal.id, title: `${meal.slot} meal` })}
+              />
             ) : (
               <div className="no-entries">{profile.display_name} isn&apos;t sharing meals with you.</div>
             )}
-            {!readOnly && (
+            {can.meals && (
               <div ref={form}>
                 <MealForm key={`${selectedDay}-${slot}-${mealVersion}`} day={selectedDay} slot={slot} onSlot={setSlot} />
               </div>
@@ -190,6 +243,7 @@ export function CalendarView() {
           </div>
         )}
       </div>
+      {history && <HistoryDialog target={history} onClose={() => setHistory(null)} />}
     </div>
   );
 }

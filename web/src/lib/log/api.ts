@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { CONNECTION_COLUMNS } from "@/lib/people/api";
-import type { Connection } from "@/lib/people/types";
+import { loadNotes, type Note } from "@/lib/coach/api";
+import type { CoachAccess, Connection, Person } from "@/lib/people/types";
 import { newId } from "./sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile, SetValues } from "./types";
 
@@ -42,6 +43,12 @@ export type LogData = {
   entries: Entry[];
   meals: Meal[];
   people: PeopleCounts;
+  /** Coach notes about this person: the coach's own when a coach is looking, the sent ones for the owner. */
+  notes: Note[];
+  /** Everyone named in this log: who added or edited entries, who wrote notes. */
+  actors: Person[];
+  /** The owner's coach, when it's your own log. */
+  coach: { person: Person; access: CoachAccess } | null;
 };
 
 /** Your own log, or with a username, the log someone shares with you. */
@@ -76,14 +83,17 @@ export async function loadLog(username?: string): Promise<LogData> {
   const owner = profile.id;
   const none = async () => [];
 
-  const [exercises, entryRows, mealRows, people] = await Promise.all([
+  const coachView = connection?.kind === "coach";
+  const [exercises, entryRows, mealRows, people, notes, coach] = await Promise.all([
     allPages<Exercise>((from, to) => db.from("exercises").select(EXERCISE_COLUMNS).order("name").range(from, to)),
     connection && !connection.share_workouts
       ? none()
       : allPages<EntryRow>((from, to) =>
           db
             .from("session_exercises")
-            .select(`id, exercise_id, position, variant, notes, tempo, sessions!inner(date), sets(${SET_COLUMNS})`)
+            .select(
+              `id, session_id, exercise_id, position, variant, notes, tempo, created_by, updated_by, updated_at, sessions!inner(date), sets(${SET_COLUMNS})`,
+            )
             .eq("sessions.user_id", owner)
             .is("sessions.deleted_at", null)
             .order("id")
@@ -94,13 +104,15 @@ export async function loadLog(username?: string): Promise<LogData> {
       : allPages<Meal>((from, to) =>
           db
             .from("meals")
-            .select("id, date, slot, description, notes, photo_path")
+            .select("id, date, slot, description, notes, photo_path, created_by, updated_by, updated_at")
             .eq("user_id", owner)
             .is("deleted_at", null)
             .order("id")
             .range(from, to),
         ),
     connection ? Promise.resolve({ sharingWith: 0, requests: 0 }) : peopleCounts(user.id),
+    connection && !coachView ? none() : loadNotes(owner),
+    connection ? Promise.resolve(null) : myCoach(user.id),
   ]);
 
   const entries: Entry[] = entryRows
@@ -123,7 +135,30 @@ export async function loadLog(username?: string): Promise<LogData> {
     }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.position - b.position);
 
-  return { profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people };
+  const named = new Set<string>();
+  for (const row of [...entries, ...mealRows]) for (const id of [row.created_by, row.updated_by]) if (id) named.add(id);
+  for (const n of notes) named.add(n.coach_id);
+  named.delete(owner);
+  named.delete(user.id);
+  const actors = named.size
+    ? (((await db.from("profiles").select(PROFILE_COLUMNS).in("id", [...named])).data ?? []) as Person[])
+    : [];
+
+  return { profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people, notes, actors, coach };
+}
+
+async function myCoach(me: string): Promise<LogData["coach"]> {
+  const db = createClient();
+  const { data } = await db
+    .from("connections")
+    .select("viewer_id, coach_access")
+    .eq("owner_id", me)
+    .eq("kind", "coach")
+    .eq("status", "active")
+    .maybeSingle();
+  if (!data) return null;
+  const { data: person } = await db.from("profiles").select(PROFILE_COLUMNS).eq("id", data.viewer_id).maybeSingle();
+  return person ? { person: person as Person, access: data.coach_access as CoachAccess } : null;
 }
 
 /** For the line on Home that says who can see your log. */

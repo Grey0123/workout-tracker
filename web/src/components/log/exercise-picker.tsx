@@ -5,10 +5,13 @@ import { cleanName, recentExercises } from "@/lib/log/sets";
 import { CATEGORIES, type Exercise } from "@/lib/log/types";
 import { useLog } from "./log-provider";
 
-/** Built-ins and your own custom exercises, the ones you may log. */
+/** Built-ins and custom exercises of the log's owner, plus a coach's own: the ones that may be logged here. */
 export function usePickableExercises(): Exercise[] {
-  const { exercises, profile } = useLog();
-  return useMemo(() => exercises.filter((e) => !e.is_custom || e.created_by === profile.id), [exercises, profile.id]);
+  const { exercises, profile, me } = useLog();
+  return useMemo(
+    () => exercises.filter((e) => !e.is_custom || e.created_by === profile.id || e.created_by === me.id),
+    [exercises, profile.id, me.id],
+  );
 }
 
 export const findByName = (list: Exercise[], name: string) => {

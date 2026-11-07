@@ -41,6 +41,11 @@ invite link. Connections only change through the functions in
 [`20261107000100_sharing.sql`](../supabase/migrations/20261107000100_sharing.sql), which check who's
 asking. A log shared with you opens read-only at `/u/their-username`, with only what they ticked.
 
+Coaches (M4) get a Clients tab, and a client's page adds Notes and lets them log within the access
+level the client chose. Every change by someone else is in the edit history and notifies the
+owner, who can undo it, including restoring what a coach deleted
+([`20261107000200_coach_workspace.sql`](../supabase/migrations/20261107000200_coach_workspace.sql)).
+
 The built-in exercises are in
 [`20261101000000_exercise_library.sql`](../supabase/migrations/20261101000000_exercise_library.sql).
 That list is a draft, written because the PRD's `exercises.json` couldn't be found.

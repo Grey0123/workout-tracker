@@ -118,6 +118,11 @@ export type Entry = {
   notes: string | null;
   tempo: string | null;
   sets: SetValues[];
+  session_id?: string;
+  /** Who added it and who changed it last, which can be a coach (PRD 5.3). */
+  created_by?: string | null;
+  updated_by?: string | null;
+  updated_at?: string;
   /** Shown straight away, not yet confirmed by the database. */
   saving?: boolean;
 };
@@ -129,6 +134,9 @@ export type Meal = {
   description: string | null;
   notes: string | null;
   photo_path: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  updated_at?: string;
   /** A local preview of a photo still uploading. */
   photo_preview?: string;
   saving?: boolean;
