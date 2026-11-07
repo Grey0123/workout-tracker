@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as api from "@/lib/log/api";
 import { shiftMonth, todayKey } from "@/lib/log/dates";
 import { mealHasContent, newId } from "@/lib/log/sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile } from "@/lib/log/types";
+import type { Connection } from "@/lib/people/types";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { SetupNotice } from "@/components/setup-notice";
 
@@ -24,7 +26,18 @@ export type MealInput = {
 };
 
 type Log = {
+  /** Whose log is shown. */
   profile: Profile;
+  /** Who is looking: the same person unless someone shared their log with them. */
+  me: Profile;
+  /** How the log was shared with me, or null when it's my own. */
+  connection: Connection | null;
+  /** Someone else's log can only be looked at, for now. */
+  readOnly: boolean;
+  /** Where this log's screens live: "" for my own, "/u/name" for a shared one. */
+  basePath: string;
+  shares: { workouts: boolean; meals: boolean; mealPhotos: boolean };
+  people: api.PeopleCounts;
   exercises: Exercise[];
   entries: Entry[];
   meals: Meal[];
@@ -74,9 +87,11 @@ function writeQueue() {
   };
 }
 
-export function LogProvider({ children }: { children: ReactNode }) {
+/** Without a username, the signed-in person's own log. With one, the log they share with you. */
+export function LogProvider({ username, children }: { username?: string; children: ReactNode }) {
   const [data, setData] = useState<api.LogData | null>(null);
   const [failed, setFailed] = useState("");
+  const [notShared, setNotShared] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [selectedDay, setSelectedDay] = useState("");
   const [month, setMonth] = useState("");
@@ -90,7 +105,7 @@ export function LogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!configured) return;
     let live = true;
-    api.loadLog().then(
+    api.loadLog(username).then(
       (loaded) => {
         if (!live) return;
         setData(loaded);
@@ -100,14 +115,16 @@ export function LogProvider({ children }: { children: ReactNode }) {
         setMonth((m) => m || today);
       },
       (err: Error) => {
+        if (!live) return;
+        if (err instanceof api.NotShared) return setNotShared(err.message);
         console.error(err);
-        if (live) setFailed("Couldn't load your log. Check your connection and try again.");
+        setFailed(`Couldn't load ${username ? "this" : "your"} log. Check your connection and try again.`);
       },
     );
     return () => {
       live = false;
     };
-  }, [configured, attempt]);
+  }, [configured, attempt, username]);
 
   const toast = useCallback((message: string, kind: Toast["kind"] = "ok") => {
     const id = ++toastSeq;
@@ -264,8 +281,12 @@ export function LogProvider({ children }: { children: ReactNode }) {
     for (const meal of data.meals) {
       if (mealHasContent(meal)) mealsByDate.set(meal.date, { ...mealsByDate.get(meal.date), [meal.slot]: meal });
     }
+    const c = data.connection;
     return {
       ...data,
+      readOnly: !!c,
+      basePath: c ? `/u/${data.profile.username}` : "",
+      shares: { workouts: !c || c.share_workouts, meals: !c || c.share_meals, mealPhotos: !c || c.share_meal_photos },
       byDate,
       mealsByDate,
       trainedDays: [...byDate.keys()].sort(),
@@ -291,6 +312,15 @@ export function LogProvider({ children }: { children: ReactNode }) {
 
   let body: ReactNode;
   if (!configured) body = <SetupNotice />;
+  else if (notShared)
+    body = (
+      <div className="card loading">
+        <p>{notShared} isn&apos;t sharing their log with you, or has stopped.</p>
+        <Link href="/people" className="btn ghost" style={{ marginTop: 12 }}>
+          Go to People
+        </Link>
+      </div>
+    );
   else if (failed)
     body = (
       <div className="card loading">

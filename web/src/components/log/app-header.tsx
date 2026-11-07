@@ -2,16 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
+/** Someone else's log, and invites, belong under People. */
 const TABS = [
-  { href: "/", label: "Home" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/progress", label: "Progress" },
+  { href: "/", label: "Home", matches: (path: string) => path === "/" },
+  { href: "/calendar", label: "Calendar", matches: (path: string) => path === "/calendar" },
+  { href: "/progress", label: "Progress", matches: (path: string) => path === "/progress" },
+  { href: "/people", label: "People", matches: (path: string) => /^\/(people|u|invite)(\/|$)/.test(path) },
 ] as const;
 
+function Tabs({ pathname }: { pathname: string | null }) {
+  return (
+    <nav aria-label="Main">
+      {TABS.map(({ href, label, matches }) => {
+        const active = pathname !== null && matches(pathname);
+        return (
+          <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function CurrentTabs() {
+  return <Tabs pathname={usePathname()} />;
+}
+
 export function AppHeader() {
-  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -41,13 +61,11 @@ export function AppHeader() {
           </div>
           <span className="role-tag">My log</span>
         </div>
-        <nav aria-label="Main">
-          {TABS.map(({ href, label }) => (
-            <Link key={href} href={href} className={pathname === href ? "active" : ""} aria-current={pathname === href ? "page" : undefined}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        {/* On pages with a username in the address, the path is only known per
+            request, so the tabs render without a highlight until it is. */}
+        <Suspense fallback={<Tabs pathname={null} />}>
+          <CurrentTabs />
+        </Suspense>
       </header>
     </div>
   );

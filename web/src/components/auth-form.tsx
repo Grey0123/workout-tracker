@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { SetupNotice } from "@/components/setup-notice";
 import { createClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/next-path";
 import { supabaseEnv } from "@/lib/supabase/env";
 
 const inputClass =
@@ -18,6 +19,18 @@ type AccountType = "user" | "coach";
 
 /** A full page load, so nothing from the previous session stays in the router's cache. */
 const goTo = (path: string) => window.location.assign(path);
+
+/** Where to go after logging in, such as the invite link that sent someone here. */
+function useNext(): string {
+  const search = useSyncExternalStore(
+    () => () => {},
+    () => window.location.search,
+    () => "",
+  );
+  return safeNext(new URLSearchParams(search).get("next"));
+}
+
+const withNext = (path: string, next: string) => (next === "/" ? path : `${path}?next=${encodeURIComponent(next)}`);
 
 const ACCOUNT_TYPES: { value: AccountType; title: string; detail: string }[] = [
   { value: "user", title: "User", detail: "Log your training and meals, and share them." },
@@ -47,6 +60,7 @@ function FormError({ message }: { message: string }) {
 }
 
 export function SignUpForm() {
+  const next = useNext();
   const [accountType, setAccountType] = useState<AccountType>("user");
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
@@ -76,6 +90,7 @@ export function SignUpForm() {
       email,
       password: String(form.get("password")),
       options: {
+        emailRedirectTo: `${window.location.origin}${next}`,
         data: {
           username,
           display_name: String(form.get("display_name")).trim(),
@@ -97,7 +112,7 @@ export function SignUpForm() {
       return;
     }
     if (data.session) {
-      goTo("/");
+      goTo(next);
     } else {
       setCheckEmail(email);
     }
@@ -175,7 +190,7 @@ export function SignUpForm() {
       </button>
       <p className="text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-blue">
+        <Link href={withNext("/login", next)} className="font-semibold text-blue">
           Log in
         </Link>
       </p>
@@ -184,6 +199,7 @@ export function SignUpForm() {
 }
 
 export function LogInForm() {
+  const next = useNext();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -203,11 +219,14 @@ export function LogInForm() {
       setError(failed.message);
       return;
     }
-    goTo("/");
+    goTo(next);
   }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3.5">
+      {next.startsWith("/invite/") && (
+        <p className="rounded-control bg-blue-soft px-3 py-2.5 text-sm text-ink">Log in or create an account to open your invite.</p>
+      )}
       <div className={cardClass}>
         <Field label="Email" name="email" type="email" autoComplete="email" />
         <Field label="Password" name="password" type="password" autoComplete="current-password" />
@@ -218,7 +237,7 @@ export function LogInForm() {
       </button>
       <p className="text-center text-sm text-muted">
         New here?{" "}
-        <Link href="/signup" className="font-semibold text-blue">
+        <Link href={withNext("/signup", next)} className="font-semibold text-blue">
           Create an account
         </Link>
       </p>

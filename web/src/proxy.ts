@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNext } from "@/lib/next-path";
 import { supabaseEnv } from "@/lib/supabase/env";
 
 const PUBLIC_PATHS = ["/login", "/signup"];
@@ -25,9 +26,15 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublic = PUBLIC_PATHS.includes(request.nextUrl.pathname);
-  if (!user && !isPublic) return NextResponse.redirect(new URL("/login", request.url));
-  if (user && isPublic) return NextResponse.redirect(new URL("/", request.url));
+  const { pathname, search } = request.nextUrl;
+  const isPublic = PUBLIC_PATHS.includes(pathname);
+  if (!user && !isPublic) {
+    // Come back here after logging in, so an invite link still works when opened signed out.
+    const login = new URL("/login", request.url);
+    if (pathname !== "/") login.searchParams.set("next", pathname + search);
+    return NextResponse.redirect(login);
+  }
+  if (user && isPublic) return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get("next")), request.url));
   return response;
 }
 

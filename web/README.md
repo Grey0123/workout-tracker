@@ -36,6 +36,11 @@ screens load the signed-in person's log in the browser and write through the dat
 [`20261101000100_logging.sql`](../supabase/migrations/20261101000100_logging.sql), so one save can't
 half-happen. Changes show straight away and roll back if the database refuses them.
 
+People (M3) is where you share your log: with a friend or a coach, by username or a single-use
+invite link. Connections only change through the functions in
+[`20261107000100_sharing.sql`](../supabase/migrations/20261107000100_sharing.sql), which check who's
+asking. A log shared with you opens read-only at `/u/their-username`, with only what they ticked.
+
 The built-in exercises are in
 [`20261101000000_exercise_library.sql`](../supabase/migrations/20261101000000_exercise_library.sql).
 That list is a draft, written because the PRD's `exercises.json` couldn't be found.

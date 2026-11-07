@@ -84,7 +84,21 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
 }
 
 export function CalendarView() {
-  const { byDate, mealsByDate, selectedDay, selectDay, pane, setPane, deleteEntry, focusForm, clearFocusForm, assistedIds } = useLog();
+  const {
+    byDate,
+    mealsByDate,
+    selectedDay,
+    selectDay,
+    pane,
+    setPane,
+    deleteEntry,
+    focusForm,
+    clearFocusForm,
+    assistedIds,
+    readOnly,
+    shares,
+    profile,
+  } = useLog();
   const [editing, setEditing] = useState<Entry | null>(null);
   const [slot, setSlot] = useState<MealSlot>("morning");
   const [mealVersion, setMealVersion] = useState(0);
@@ -148,19 +162,31 @@ export function CalendarView() {
 
         {pane === "workout" ? (
           <div role="tabpanel">
-            <div className="entries">
-              <Activities entries={rows} onEdit={edit} onDelete={remove} />
-            </div>
-            <div ref={form}>
-              <WorkoutForm key={selectedDay} day={selectedDay} editing={editing} onDone={() => setEditing(null)} />
-            </div>
+            {shares.workouts ? (
+              <div className="entries">
+                <Activities entries={rows} onEdit={readOnly ? undefined : edit} onDelete={readOnly ? undefined : remove} />
+              </div>
+            ) : (
+              <div className="no-entries">{profile.display_name} isn&apos;t sharing workouts with you.</div>
+            )}
+            {!readOnly && (
+              <div ref={form}>
+                <WorkoutForm key={selectedDay} day={selectedDay} editing={editing} onDone={() => setEditing(null)} />
+              </div>
+            )}
           </div>
         ) : (
           <div role="tabpanel">
-            <MealsList day={selectedDay} onPick={pickSlot} onDeleted={() => setMealVersion((n) => n + 1)} />
-            <div ref={form}>
-              <MealForm key={`${selectedDay}-${slot}-${mealVersion}`} day={selectedDay} slot={slot} onSlot={setSlot} />
-            </div>
+            {shares.meals ? (
+              <MealsList day={selectedDay} onPick={pickSlot} onDeleted={() => setMealVersion((n) => n + 1)} />
+            ) : (
+              <div className="no-entries">{profile.display_name} isn&apos;t sharing meals with you.</div>
+            )}
+            {!readOnly && (
+              <div ref={form}>
+                <MealForm key={`${selectedDay}-${slot}-${mealVersion}`} day={selectedDay} slot={slot} onSlot={setSlot} />
+              </div>
+            )}
           </div>
         )}
       </div>

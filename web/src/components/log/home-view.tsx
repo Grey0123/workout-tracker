@@ -10,7 +10,7 @@ import { CountUp } from "./count-up";
 import { useLog } from "./log-provider";
 
 function SessionCard({ day }: { day: string }) {
-  const { byDate, mealsByDate, openDay, assistedIds } = useLog();
+  const { byDate, mealsByDate, openDay, assistedIds, basePath } = useLog();
   const [open, setOpen] = useState(false);
   const entries = byDate.get(day) ?? [];
   const meals = Object.keys(mealsByDate.get(day) ?? {}).length;
@@ -37,7 +37,7 @@ function SessionCard({ day }: { day: string }) {
         <div className="sx-body">
           <Activities entries={entries} />
           {meals > 0 && <div className="sx-meals">{plural(meals, "meal")} logged this day</div>}
-          <Link href="/calendar" className="btn ghost sm sx-open" onClick={() => openDay(day)}>
+          <Link href={`${basePath}/calendar`} className="btn ghost sm sx-open" onClick={() => openDay(day)}>
             Open day in calendar →
           </Link>
         </div>
@@ -47,7 +47,7 @@ function SessionCard({ day }: { day: string }) {
 }
 
 export function HomeView() {
-  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds } = useLog();
+  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds, readOnly, shares, people } = useLog();
   const today = todayKey();
   const todayRows = byDate.get(today) ?? [];
   const todayMeals = Object.keys(mealsByDate.get(today) ?? {}).length;
@@ -67,19 +67,38 @@ export function HomeView() {
             <span className={`pill${todayRows.length ? " done" : ""}`}>
               {todayRows.length ? `✓ ${plural(todayRows.length, "exercise")} · ${plural(entriesSets(todayRows), "set")}` : "no workout yet today"}
             </span>
-            <span className={`pill${todayMeals ? " blue" : ""}`}>
-              {todayMeals ? `✓ ${todayMeals} of 3 meals logged` : "no meals logged today"}
-            </span>
+            {shares.meals && (
+              <span className={`pill${todayMeals ? " blue" : ""}`}>
+                {todayMeals ? `✓ ${todayMeals} of 3 meals logged` : "no meals logged today"}
+              </span>
+            )}
           </div>
+          {!readOnly && (
+            // PRD 5.2: you always know who can see your log.
+            <div className="top">
+              <Link href="/people" className="pill link-pill">
+                {people.sharingWith
+                  ? `Shared with ${people.sharingWith === 1 ? "1 person" : `${people.sharingWith} people`}`
+                  : "Only you can see your log"}
+              </Link>
+              {people.requests > 0 && (
+                <Link href="/people" className="pill amber link-pill">
+                  {plural(people.requests, "request")} waiting
+                </Link>
+              )}
+            </div>
+          )}
         </div>
-        <div className="today-actions">
-          <Link href="/calendar" className="btn" onClick={() => openDay(today, "workout")}>
-            Log workout
-          </Link>
-          <Link href="/calendar" className="btn ghost" onClick={() => openDay(today, "food")}>
-            Log meal
-          </Link>
-        </div>
+        {!readOnly && (
+          <div className="today-actions">
+            <Link href="/calendar" className="btn" onClick={() => openDay(today, "workout")}>
+              Log workout
+            </Link>
+            <Link href="/calendar" className="btn ghost" onClick={() => openDay(today, "food")}>
+              Log meal
+            </Link>
+          </div>
+        )}
       </section>
 
       <h2 className="section">This week</h2>
@@ -116,20 +135,30 @@ export function HomeView() {
         {recent.length ? (
           recent.map((day) => <SessionCard key={day} day={day} />)
         ) : (
-          <div className="card no-entries">No sessions yet. Tap a day in the calendar to log your first workout.</div>
+          <div className="card no-entries">
+            {readOnly
+              ? shares.workouts
+                ? `${profile.display_name} hasn't logged a session yet.`
+                : `${profile.display_name} isn't sharing workouts with you.`
+              : "No sessions yet. Tap a day in the calendar to log your first workout."}
+          </div>
         )}
       </div>
 
-      <h2 className="section">Account</h2>
-      <section className="card account">
-        <div>
-          <div className="account-name">{profile.display_name}</div>
-          <div className="account-meta">
-            @{profile.username} · {profile.account_type === "coach" ? "Coach account" : "User account"}
-          </div>
-        </div>
-        <SignOutButton />
-      </section>
+      {!readOnly && (
+        <>
+          <h2 className="section">Account</h2>
+          <section className="card account">
+            <div>
+              <div className="account-name">{profile.display_name}</div>
+              <div className="account-meta">
+                @{profile.username} · {profile.account_type === "coach" ? "Coach account" : "User account"}
+              </div>
+            </div>
+            <SignOutButton />
+          </section>
+        </>
+      )}
     </>
   );
 }

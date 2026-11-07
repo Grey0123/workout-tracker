@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
+import { CONNECTION_COLUMNS } from "@/lib/people/api";
+import type { Connection } from "@/lib/people/types";
 import { newId } from "./sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile, SetValues } from "./types";
 
@@ -16,6 +18,7 @@ async function allPages<T>(page: (from: number, to: number) => PromiseLike<{ dat
 }
 
 const SET_COLUMNS = "set_no, weight_kg, reps, duration_s, distance_km, rounds, rpe, calories, tempo, side";
+const PROFILE_COLUMNS = "id, username, display_name, account_type";
 const EXERCISE_COLUMNS = "id, name, category, secondary_muscles, equipment, kind, inputs, per_side, assisted, is_custom, created_by";
 
 type EntryRow = Omit<Entry, "date" | "sets"> & {
@@ -23,9 +26,26 @@ type EntryRow = Omit<Entry, "date" | "sets"> & {
   sets: (SetValues & { set_no: number })[];
 };
 
-export type LogData = { profile: Profile; exercises: Exercise[]; entries: Entry[]; meals: Meal[] };
+/** Someone else's log that isn't shared with the person asking, or no longer is. */
+export class NotShared extends Error {}
 
-export async function loadLog(): Promise<LogData> {
+export type PeopleCounts = { sharingWith: number; requests: number };
+
+export type LogData = {
+  /** Whose log this is. */
+  profile: Profile;
+  /** Who is looking. The same person unless the log was shared with them. */
+  me: Profile;
+  /** How it was shared, or null for your own log. */
+  connection: Connection | null;
+  exercises: Exercise[];
+  entries: Entry[];
+  meals: Meal[];
+  people: PeopleCounts;
+};
+
+/** Your own log, or with a username, the log someone shares with you. */
+export async function loadLog(username?: string): Promise<LogData> {
   const db = createClient();
   const {
     data: { user },
@@ -33,33 +53,54 @@ export async function loadLog(): Promise<LogData> {
   } = await db.auth.getUser();
   if (authError || !user) throw new Error(authError?.message ?? "Not signed in.");
 
-  const { data: profile, error: profileError } = await db
-    .from("profiles")
-    .select("id, username, display_name, account_type")
-    .eq("id", user.id)
-    .single();
-  if (profileError) throw new Error(profileError.message);
+  const { data: me, error: meError } = await db.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).single();
+  if (meError) throw new Error(meError.message);
 
-  const [exercises, entryRows, mealRows] = await Promise.all([
+  let profile = me as Profile;
+  let connection: Connection | null = null;
+  if (username && username.toLowerCase() !== profile.username) {
+    // Both come back empty unless a connection lets this person see them.
+    const { data: owner } = await db.from("profiles").select(PROFILE_COLUMNS).eq("username", username.toLowerCase()).maybeSingle();
+    if (!owner) throw new NotShared(username);
+    const { data: shared } = await db
+      .from("connections")
+      .select(CONNECTION_COLUMNS)
+      .eq("owner_id", owner.id)
+      .eq("viewer_id", user.id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!shared) throw new NotShared((owner as Profile).display_name);
+    profile = owner as Profile;
+    connection = shared as unknown as Connection;
+  }
+  const owner = profile.id;
+  const none = async () => [];
+
+  const [exercises, entryRows, mealRows, people] = await Promise.all([
     allPages<Exercise>((from, to) => db.from("exercises").select(EXERCISE_COLUMNS).order("name").range(from, to)),
-    allPages<EntryRow>((from, to) =>
-      db
-        .from("session_exercises")
-        .select(`id, exercise_id, position, variant, notes, tempo, sessions!inner(date), sets(${SET_COLUMNS})`)
-        .eq("sessions.user_id", user.id)
-        .is("sessions.deleted_at", null)
-        .order("id")
-        .range(from, to) as unknown as PromiseLike<{ data: EntryRow[] | null; error: { message: string } | null }>,
-    ),
-    allPages<Meal>((from, to) =>
-      db
-        .from("meals")
-        .select("id, date, slot, description, notes, photo_path")
-        .eq("user_id", user.id)
-        .is("deleted_at", null)
-        .order("id")
-        .range(from, to),
-    ),
+    connection && !connection.share_workouts
+      ? none()
+      : allPages<EntryRow>((from, to) =>
+          db
+            .from("session_exercises")
+            .select(`id, exercise_id, position, variant, notes, tempo, sessions!inner(date), sets(${SET_COLUMNS})`)
+            .eq("sessions.user_id", owner)
+            .is("sessions.deleted_at", null)
+            .order("id")
+            .range(from, to) as unknown as PromiseLike<{ data: EntryRow[] | null; error: { message: string } | null }>,
+        ),
+    connection && !connection.share_meals
+      ? none()
+      : allPages<Meal>((from, to) =>
+          db
+            .from("meals")
+            .select("id, date, slot, description, notes, photo_path")
+            .eq("user_id", owner)
+            .is("deleted_at", null)
+            .order("id")
+            .range(from, to),
+        ),
+    connection ? Promise.resolve({ sharingWith: 0, requests: 0 }) : peopleCounts(user.id),
   ]);
 
   const entries: Entry[] = entryRows
@@ -82,7 +123,21 @@ export async function loadLog(): Promise<LogData> {
     }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.position - b.position);
 
-  return { profile: profile as Profile, exercises, entries, meals: mealRows };
+  return { profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people };
+}
+
+/** For the line on Home that says who can see your log. */
+async function peopleCounts(me: string): Promise<PeopleCounts> {
+  const { data, error } = await createClient()
+    .from("connections")
+    .select("owner_id, status, requested_by")
+    .in("status", ["pending", "active"])
+    .or(`owner_id.eq.${me},viewer_id.eq.${me}`);
+  if (error) throw new Error(error.message);
+  return {
+    sharingWith: (data ?? []).filter((c) => c.status === "active" && c.owner_id === me).length,
+    requests: (data ?? []).filter((c) => c.status === "pending" && c.requested_by !== me).length,
+  };
 }
 
 const toNumber = (v: number | string | null) => (v === null ? null : Number(v));

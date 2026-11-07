@@ -1,73 +1,15 @@
 /**
  * The PRD's access rules (sections 4 and 9), run against the real migration on
- * PGlite, an in-process Postgres. These need no Docker and no Supabase project.
- * The stubs below stand in for the parts of Supabase the migration relies on.
+ * PGlite (see harness.ts). Sharing itself, how connections are made and ended,
+ * is in sharing.test.ts.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { MIGRATIONS, openDb, SUPABASE_STUBS, type Row } from "./harness";
 
-const MIGRATIONS = join(import.meta.dirname, "..", "..", "..", "supabase", "migrations");
-
-const SUPABASE_STUBS = `
-  create role anon nologin;
-  create role authenticated nologin;
-  grant usage on schema public to anon, authenticated;
-
-  create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), raw_user_meta_data jsonb);
-  create function auth.uid() returns uuid language sql stable as
-    $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-  grant usage on schema auth to anon, authenticated;
-
-  create schema storage;
-  create table storage.buckets (id text primary key, name text, public boolean,
-                                file_size_limit bigint, allowed_mime_types text[]);
-  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
-  alter table storage.objects enable row level security;
-  create function storage.foldername(name text) returns text[] language sql immutable as
-    $$ select (string_to_array(name, '/'))[1 : cardinality(string_to_array(name, '/')) - 1] $$;
-  grant usage on schema storage to anon, authenticated;
-  grant select, insert, update, delete on storage.objects to authenticated;
-`;
-
-let db: PGlite;
-let seq = 0;
-
-type Row = Record<string, unknown>;
-
-async function asRole<T>(role: string, id: string, fn: () => Promise<T>): Promise<T> {
-  await db.query("select set_config('request.jwt.claim.sub', $1, false)", [id]);
-  await db.exec(`set role ${role}`);
-  try {
-    return await fn();
-  } finally {
-    await db.exec("reset role");
-    await db.query("select set_config('request.jwt.claim.sub', '', false)");
-  }
-}
-
-const as = <T>(user: string, fn: () => Promise<T>) => asRole("authenticated", user, fn);
-const rows = async (sql: string, params: unknown[] = []) => (await db.query<Row>(sql, params)).rows;
-const changed = async (sql: string, params: unknown[] = []) => (await db.query(sql, params)).affectedRows ?? 0;
-
-async function newUser(type: "user" | "coach" = "user"): Promise<string> {
-  const n = ++seq;
-  const meta = { username: `u${n}_${type}`, display_name: `User ${n}`, account_type: type, coach_disclaimer_accepted: type === "coach" };
-  const [row] = await rows("insert into auth.users (raw_user_meta_data) values ($1) returning id", [JSON.stringify(meta)]);
-  return row.id as string;
-}
-
-async function connect(owner: string, viewer: string, kind: "friend" | "coach", extra: Record<string, unknown> = {}) {
-  const cols = ["owner_id", "viewer_id", "kind", "status", ...Object.keys(extra)];
-  const vals = [owner, viewer, kind, "active", ...Object.values(extra)];
-  const [row] = await rows(
-    `insert into public.connections (${cols.join(", ")}) values (${vals.map((_, i) => `$${i + 1}`).join(", ")}) returning id`,
-    vals,
-  );
-  return row.id as string;
-}
+const { asRole, as, rows, changed, newUser, connect } = await openDb();
 
 /** A session with one exercise and one set, written directly as trusted server work. */
 async function workout(owner: string) {
@@ -84,14 +26,7 @@ async function meal(owner: string, date = "2026-10-27") {
 }
 
 const countSessions = (id: string) => rows("select id from public.sessions where id = $1", [id]).then(r => r.length);
-
-beforeAll(async () => {
-  db = new PGlite();
-  await db.exec(SUPABASE_STUBS);
-  for (const file of readdirSync(MIGRATIONS).sort()) {
-    await db.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
-  }
-});
+let seq = 0;
 
 describe("baseline", () => {
   it("has row-level security on every public table", async () => {
@@ -775,7 +710,7 @@ describe("storage", () => {
     await as(stranger, async () => { expect(await seen(photo)).toBe(0); expect(await seen(video)).toBe(0); });
     await as(friend, async () => { expect(await seen(photo)).toBe(0); expect(await seen(video)).toBe(1); });
 
-    await rows("update public.connections set share_meal_photos = true where id = $1", [id]);
+    await rows("update public.connections set share_meals = true, share_meal_photos = true where id = $1", [id]);
     await as(friend, async () => expect(await seen(photo)).toBe(1));
 
     await rows("update public.connections set status = 'revoked' where id = $1", [id]);
@@ -785,7 +720,7 @@ describe("storage", () => {
   it("only lets you upload into your own folder", async () => {
     const owner = await newUser();
     const coach = await newUser("coach");
-    await connect(owner, coach, "coach", { share_meal_photos: true });
+    await connect(owner, coach, "coach", { share_meals: true, share_meal_photos: true });
     await as(coach, async () => {
       await expect(rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${owner}/x.jpg`])).rejects.toThrow(/row-level security/);
       await rows("insert into storage.objects (bucket_id, name) values ('meal-photos', $1)", [`${coach}/x.jpg`]);

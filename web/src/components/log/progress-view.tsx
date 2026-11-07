@@ -113,7 +113,7 @@ function LineChart({ days, metric }: { days: DayProgress[]; metric: ProgressMetr
 }
 
 export function ProgressView() {
-  const { entries, exercises } = useLog();
+  const { entries, exercises, readOnly, shares, profile } = useLog();
   const logged = useMemo(() => loggedExercises(entries, exercises), [entries, exercises]);
   const [picked, setPicked] = useState("");
   const [picks, setPicks] = useState<ProgressMetric>("top");
@@ -133,7 +133,12 @@ export function ProgressView() {
   const metric = available.find((m) => m.id === picks)?.id ?? available[0]?.id ?? "top";
 
   if (!logged.length) {
-    return <div className="card pg-empty">Log a workout to see your progress.</div>;
+    const empty = !readOnly
+      ? "Log a workout to see your progress."
+      : shares.workouts
+        ? `${profile.display_name} hasn't logged a workout yet.`
+        : `${profile.display_name} isn't sharing workouts with you.`;
+    return <div className="card pg-empty">{empty}</div>;
   }
 
   const last = days.at(-1)?.date;

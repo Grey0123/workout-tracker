@@ -35,7 +35,7 @@ export function MealPhoto({ path, preview, className = "meal-photo" }: { path: s
 }
 
 export function MealsList({ day, onPick, onDeleted }: { day: string; onPick: (slot: MealSlot) => void; onDeleted: () => void }) {
-  const { mealsByDate, deleteMeal } = useLog();
+  const { mealsByDate, deleteMeal, readOnly, shares } = useLog();
   const meals = mealsByDate.get(day) ?? {};
 
   const remove = (meal: Meal) => {
@@ -56,14 +56,16 @@ export function MealsList({ day, onPick, onDeleted }: { day: string; onPick: (sl
                 <>
                   {meal.description}
                   {meal.notes && <span className="meal-note"> · {meal.notes}</span>}
-                  {(meal.photo_path || meal.photo_preview) && <MealPhoto path={meal.photo_path} preview={meal.photo_preview} />}
+                  {shares.mealPhotos && (meal.photo_path || meal.photo_preview) && (
+                    <MealPhoto path={meal.photo_path} preview={meal.photo_preview} />
+                  )}
                   {meal.saving && <span className="act-saving">Saving…</span>}
                 </>
               ) : (
                 <span className="empty">not logged</span>
               )}
             </span>
-            {meal ? (
+            {readOnly ? null : meal ? (
               !meal.saving && (
                 <span className="slot-btns">
                   <button type="button" className="btn ghost sm" aria-label={`Edit ${slot} meal`} onClick={() => onPick(slot)}>
