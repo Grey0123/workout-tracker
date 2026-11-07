@@ -6,16 +6,20 @@ import { useLog } from "@/components/log/log-provider";
 import * as coach from "@/lib/coach/api";
 import { describeGroup, groupByTx, sentence, type Change } from "@/lib/coach/changes";
 import { todayKey, weekOf } from "@/lib/log/dates";
+import { loggedExercises } from "@/lib/log/sets";
 import { SHARE_OPTIONS } from "@/lib/people/types";
 import { when } from "./history-dialog";
 import { useChangeContext } from "./use-change-context";
 
 /** Edit a pinned note in place: the current goal, or this week's plan. */
 function PinnedNote({ kind, label, note }: { kind: "goal" | "weekly_plan"; label: string; note: coach.Note | undefined }) {
-  const { me, profile, setNotes, toast } = useLog();
+  const { me, profile, setNotes, toast, entries, exercises } = useLog();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(note?.body ?? "");
+  const [exerciseId, setExerciseId] = useState(note?.goal_exercise_id ?? "");
+  const [target, setTarget] = useState(note?.goal_target_kg ? String(Number(note.goal_target_kg)) : "");
   const [busy, setBusy] = useState(false);
+  const tracked = kind === "goal" ? loggedExercises(entries, exercises).filter((e) => !e.assisted && e.inputs.includes("weight_kg")) : [];
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -28,6 +32,8 @@ function PinnedNote({ kind, label, note }: { kind: "goal" | "weekly_plan"; label
         body: text.trim(),
         date: null,
         week_start: kind === "weekly_plan" ? weekOf(todayKey())[0] : null,
+        goal_exercise_id: exerciseId && Number(target) > 0 ? exerciseId : null,
+        goal_target_kg: exerciseId && Number(target) > 0 ? Number(target) : null,
       });
       setNotes((list) => [saved, ...list.filter((n) => n.id !== saved.id)]);
       toast(`${label} saved`);
@@ -49,6 +55,8 @@ function PinnedNote({ kind, label, note }: { kind: "goal" | "weekly_plan"; label
             className="link-btn"
             onClick={() => {
               setText(note?.body ?? "");
+              setExerciseId(note?.goal_exercise_id ?? "");
+              setTarget(note?.goal_target_kg ? String(Number(note.goal_target_kg)) : "");
               setEditing(true);
             }}
           >
@@ -65,6 +73,30 @@ function PinnedNote({ kind, label, note }: { kind: "goal" | "weekly_plan"; label
             placeholder={kind === "goal" ? "Bench Press 80 kg by December" : "Push / Pull / Legs × 2, focus on bench lockout"}
             onChange={(e) => setText(e.target.value)}
           />
+          {kind === "goal" && tracked.length > 0 && (
+            <div className="goal-track">
+              <div className="cx-hint">To show a progress bar on {profile.display_name}&apos;s Progress, pick an exercise and a target estimated 1RM.</div>
+              <select aria-label="Exercise to track" value={exerciseId} onChange={(e) => setExerciseId(e.target.value)}>
+                <option value="">No exercise</option>
+                {tracked.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Target estimated 1RM in kg"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={1}
+                placeholder="Target kg"
+                value={target}
+                disabled={!exerciseId}
+                onChange={(e) => setTarget(e.target.value)}
+              />
+            </div>
+          )}
           <div className="card-actions">
             <button type="submit" className="btn sm" disabled={busy || !text.trim()}>
               {busy ? "Saving…" : "Save"}

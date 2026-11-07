@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ProgressView } from "@/components/log/progress-view";
+import { ProgressView } from "@/components/progress/progress-view";
 
 export const metadata: Metadata = { title: "Shared progress · WorkoutTracker" };
 

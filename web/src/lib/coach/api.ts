@@ -23,9 +23,12 @@ export type Note = {
   week_start: string | null;
   done_at: string | null;
   created_at: string;
+  /** A goal can name an exercise and a target estimated 1RM, for the progress bar. */
+  goal_exercise_id: string | null;
+  goal_target_kg: number | null;
 };
 
-const NOTE_COLUMNS = "id, coach_id, user_id, kind, body, date, week_start, done_at, created_at";
+const NOTE_COLUMNS = "id, coach_id, user_id, kind, body, date, week_start, done_at, created_at, goal_exercise_id, goal_target_kg";
 
 async function check<T>(call: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await call;
@@ -37,11 +40,18 @@ async function check<T>(call: PromiseLike<{ data: T | null; error: { message: st
 export const loadNotes = (userId: string) =>
   check<Note[]>(createClient().from("coach_notes").select(NOTE_COLUMNS).eq("user_id", userId).order("created_at", { ascending: false }));
 
-export type NoteInput = Pick<Note, "kind" | "body" | "date" | "week_start">;
+export type NoteInput = Pick<Note, "kind" | "body" | "date" | "week_start"> & Partial<Pick<Note, "goal_exercise_id" | "goal_target_kg">>;
 
 export async function saveNote(coachId: string, userId: string, id: string | null, input: NoteInput): Promise<Note> {
   const db = createClient();
-  const row = { ...input, date: input.kind === "day" ? input.date : null, week_start: input.kind === "weekly_plan" ? input.week_start : null };
+  const goal = input.kind === "goal" && input.goal_exercise_id && input.goal_target_kg;
+  const row = {
+    ...input,
+    date: input.kind === "day" ? input.date : null,
+    week_start: input.kind === "weekly_plan" ? input.week_start : null,
+    goal_exercise_id: goal ? input.goal_exercise_id : null,
+    goal_target_kg: goal ? input.goal_target_kg : null,
+  };
   return check<Note>(
     id
       ? db.from("coach_notes").update(row).eq("id", id).select(NOTE_COLUMNS).single()

@@ -46,6 +46,11 @@ level the client chose. Every change by someone else is in the edit history and 
 owner, who can undo it, including restoring what a coach deleted
 ([`20261107000200_coach_workspace.sql`](../supabase/migrations/20261107000200_coach_workspace.sql)).
 
+Progress (M5) covers a chosen period against the one before: summary, the coach's goal with a progress
+bar, strength (estimated 1RM, PRs with their tempo, rep ranges), sets per muscle against a 10–20 target,
+a training heatmap, meals, body weight with a 7-day average, form videos, and coach evaluations. The
+figures are pure functions in [`src/lib/progress/calc.ts`](src/lib/progress/calc.ts), tested on their own.
+
 The built-in exercises are in
 [`20261101000000_exercise_library.sql`](../supabase/migrations/20261101000000_exercise_library.sql).
 That list is a draft, written because the PRD's `exercises.json` couldn't be found.

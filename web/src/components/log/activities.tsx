@@ -15,6 +15,7 @@ import {
   weightSummary,
 } from "@/lib/log/sets";
 import type { Entry } from "@/lib/log/types";
+import { EntryVideos } from "@/components/progress/videos";
 import { useLog } from "./log-provider";
 
 const TEMPO_HELP = "Seconds: lowering · pause at the bottom · lifting · pause at the top. X means as fast as possible.";
@@ -101,6 +102,7 @@ function Activity({ entry, onEdit, onDelete, onHistory }: { entry: Entry } & Han
             ))}
           </div>
           {meta.length > 0 && <div className="act-meta">{meta.join(" · ")}</div>}
+          <EntryVideos entry={entry} name={name} canAdd={!!(onEdit || onDelete)} />
           {(onEdit || onDelete || onHistory) && !entry.saving && (
             <div className="act-actions">
               {onEdit && (

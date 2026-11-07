@@ -1,0 +1,588 @@
+/* The Progress page (M5, PRD 5.4), in the same look as log.css. */
+
+.period-card {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.period-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.period-chips button {
+  min-height: 40px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.period-chips button.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.custom-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+/* Date fields won't shrink below their natural width unless told to. */
+.custom-range label,
+.log-app .custom-range input {
+  min-width: 0;
+}
+.log-app .custom-range input {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.period-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.log-app .filter-field {
+  flex: 1 1 180px;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.log-app .filter-field select {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.summary-stats {
+  margin-bottom: 12px;
+}
+.stat-delta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.stat-delta.up {
+  color: var(--green-ink);
+}
+.stat-delta.down {
+  color: var(--amber-ink);
+}
+
+/* goal */
+.goal-card {
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.goal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.goal-head .field-label {
+  margin: 0;
+}
+.goal-figure {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.goal-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.goal-bar div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+}
+.goal-track {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 8px;
+}
+.goal-track .cx-hint {
+  grid-column: 1 / -1;
+}
+.focus-list {
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 14px;
+}
+
+/* strength */
+.strength {
+  overflow: hidden;
+}
+.pg-controls.inline {
+  margin: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.strength-note {
+  padding: 8px 13px 0;
+}
+.rep-ranges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 13px 12px;
+}
+.rep-ranges div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.rep-ranges b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--navy);
+}
+.rep-ranges small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.pr-list {
+  padding: 12px 13px 14px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "badge name set"
+    "badge name when";
+  column-gap: 10px;
+  align-items: center;
+  font-size: 13.5px;
+}
+.pr-badge {
+  grid-area: badge;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.pr-name {
+  grid-area: name;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pr-name span {
+  font-weight: 600;
+}
+.pr-name small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pr-set {
+  grid-area: set;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pr-when {
+  grid-area: when;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* volume and consistency */
+.volume,
+.consistency {
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.volume-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.volume-head .field-label {
+  margin: 0;
+}
+.muscle {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.muscle-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.muscle-target {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--line);
+}
+.muscle-fill {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 3px;
+  background: var(--blue);
+}
+.muscle-fill.low {
+  background: var(--amber);
+}
+.muscle-sets {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.balance {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.heat {
+  display: grid;
+  grid-template-columns: 46px repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+.heat-row {
+  display: contents;
+}
+.heat-dow,
+.heat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.heat-label {
+  text-align: left;
+  white-space: nowrap;
+}
+.heat-cell {
+  display: block;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--line-soft);
+}
+.heat-cell.trained {
+  background: var(--blue);
+}
+.heat-cell.future {
+  background: var(--surface);
+  border: 1.5px dashed #c3cdda;
+}
+.heat-cell.outside {
+  opacity: 0.35;
+}
+.heat.compact {
+  gap: 2px;
+}
+.heat.compact .heat-cell {
+  height: 11px;
+  border-radius: 2px;
+}
+
+/* nutrition and body */
+.nb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.nb {
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.nb .field-label {
+  margin: 0;
+}
+.nb-num {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--navy);
+}
+.nb-num small {
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.sparkline {
+  max-width: 100%;
+}
+.weigh-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 4px;
+}
+.log-app .weigh-in input {
+  padding: 8px 10px;
+  min-width: 0;
+}
+.weigh-in .btn.sm {
+  min-height: 40px;
+}
+
+/* videos */
+.video-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-group {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-group .field-label {
+  margin: 0;
+}
+.video-tile {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.video-thumb {
+  flex: 0 0 auto;
+  width: 88px;
+  height: 56px;
+  border: none;
+  border-radius: 8px;
+  background: var(--navy-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-player {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 10px;
+  background: #000;
+}
+.video-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-weight: 600;
+}
+.video-meta small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.danger-link {
+  align-self: flex-start;
+  color: var(--red);
+}
+.entry-videos {
+  margin-top: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.btn.sm.add-video {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+/* evaluations and recaps */
+.section-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.section-row .link-btn {
+  margin: 0;
+}
+.write-evaluation {
+  margin-bottom: 10px;
+}
+.evaluation {
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.evaluation-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.ratings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rating {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.rating-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+.rating-bar span {
+  height: 8px;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+.rating-bar span.on {
+  background: var(--blue);
+}
+.rating-score {
+  text-align: right;
+  font-weight: 600;
+}
+.evaluation-text {
+  font-size: 14px;
+  white-space: pre-line;
+}
+.next-goals ul {
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 14px;
+}
+.recap-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 14px;
+}
+.recap-lines {
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.evaluation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.evaluation-form .ffield {
+  margin: 0;
+}
+.rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.rate-buttons {
+  display: flex;
+  gap: 4px;
+}
+.rate-buttons button {
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-weight: 700;
+  color: var(--muted);
+}
+.rate-buttons button.on {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+@media (min-width: 641px) {
+  .period-chips {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .summary-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .muscle,
+  .rating {
+    grid-template-columns: 140px minmax(0, 1fr) 44px;
+  }
+}
+@media (max-width: 360px) {
+  .nb-grid {
+    grid-template-columns: 1fr;
+  }
+  .rate-buttons button {
+    width: 34px;
+  }
+}
+
+/* one exercise's figures, under its chart */
+.mini-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 13px 12px;
+}
+.mini-stat {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.mini-stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--navy);
+}
+.mini-stat small {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@media (min-width: 641px) {
+  .mini-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

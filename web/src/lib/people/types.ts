@@ -4,11 +4,12 @@ export type CoachAccess = "add_edit" | "full";
 export type ShareKey = "share_workouts" | "share_meals" | "share_meal_photos" | "share_bodyweight" | "share_progress_photos";
 export type Shares = Record<ShareKey, boolean>;
 
-/** The ones there's something to see for. Body weight and progress photos get their screens later. */
+/** The ones there's something to see for. Progress photos get their screen later. */
 export const SHARE_OPTIONS: { key: ShareKey; label: string; needs?: ShareKey }[] = [
   { key: "share_workouts", label: "Workouts" },
   { key: "share_meals", label: "Meals" },
   { key: "share_meal_photos", label: "Meal photos", needs: "share_meals" },
+  { key: "share_bodyweight", label: "Body weight" },
 ];
 
 /** Mirrors default_shares() in the sharing migration. */

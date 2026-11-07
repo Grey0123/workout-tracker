@@ -7,7 +7,9 @@ import { shiftMonth, todayKey } from "@/lib/log/dates";
 import { mealHasContent, newId } from "@/lib/log/sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile } from "@/lib/log/types";
 import type { Note } from "@/lib/coach/api";
-import type { Connection } from "@/lib/people/types";
+import type { Evaluation, Video } from "@/lib/progress/api";
+import type { Weight } from "@/lib/progress/calc";
+import type { Connection, Person } from "@/lib/people/types";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { SetupNotice } from "@/components/setup-notice";
 
@@ -50,6 +52,13 @@ type Log = {
   /** Fetches the log again, after an undo for instance. */
   reload: () => void;
   setNotes: (change: (notes: Note[]) => Note[]) => void;
+  /** Everyone named in this log, for initials and names. */
+  actors: Person[];
+  weights: Weight[];
+  evaluations: Evaluation[];
+  videos: Video[];
+  /** Changes loaded data in place, for weigh-ins, evaluations and videos. */
+  update: (change: (data: api.LogData) => api.LogData) => void;
   exercises: Exercise[];
   entries: Entry[];
   meals: Meal[];
@@ -159,6 +168,7 @@ export function LogProvider({ username, children }: { username?: string; childre
     setData((d) => (d ? { ...d, notes: change(d.notes) } : d));
   }, []);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  const update = useCallback((change: (d: api.LogData) => api.LogData) => setData((d) => (d ? change(d) : d)), []);
 
   const saveEntry = useCallback(
     async (entry: Entry, label: string) => {
@@ -342,6 +352,7 @@ export function LogProvider({ username, children }: { username?: string; childre
       },
       reload,
       setNotes,
+      update,
       basePath: c ? `/u/${data.profile.username}` : "",
       shares: { workouts: !c || c.share_workouts, meals: !c || c.share_meals, mealPhotos: !c || c.share_meal_photos },
       byDate,
@@ -365,7 +376,7 @@ export function LogProvider({ username, children }: { username?: string; childre
       saveExercise,
       toast,
     };
-  }, [data, selectedDay, month, pane, focusForm, clearFocusForm, selectDay, showMonth, showToday, openDay, saveEntry, deleteEntry, saveMeal, deleteMeal, saveExercise, toast, reload, setNotes]);
+  }, [data, selectedDay, month, pane, focusForm, clearFocusForm, selectDay, showMonth, showToday, openDay, saveEntry, deleteEntry, saveMeal, deleteMeal, saveExercise, toast, reload, setNotes, update]);
 
   let body: ReactNode;
   if (!configured) body = <SetupNotice />;
