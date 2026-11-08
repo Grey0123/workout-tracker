@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { dayMonth } from "@/lib/log/dates";
+import { dayMonth, todayKey } from "@/lib/log/dates";
 import {
   cleanName,
   columnsFor,
@@ -19,6 +19,7 @@ import type { RoutineItem } from "@/lib/routines/plan";
 import { CustomExerciseForm } from "./custom-exercise-form";
 import { ExercisePicker, findByName, usePickableExercises } from "./exercise-picker";
 import { useLog } from "./log-provider";
+import { RestSettings, useRest } from "./rest-timer";
 
 type Draft = {
   id: string | null;
@@ -133,7 +134,10 @@ export function WorkoutForm({
   /** Called when the form is cleared: with the exercise just saved, or nothing on cancel. */
   onDone: (savedExerciseId?: string) => void;
 }) {
-  const { exercises, entries, saveEntry, me, profile, plansByDate, actorLabel } = useLog();
+  const { exercises, entries, saveEntry, me, profile, plansByDate, actorLabel, isOwn } = useLog();
+  const rest = useRest();
+  // Resting between sets is for someone training now: your own log, today.
+  const training = isOwn && day === todayKey();
   const pickable = usePickableExercises();
   const [draft, setDraft] = useState(blankDraft);
   const [loaded, setLoaded] = useState<Entry | null>(null);
@@ -263,6 +267,7 @@ export function WorkoutForm({
     setDraft(blankDraft());
     onDone(draft.id ? undefined : chosen.id);
     setStatus({ text: `${verb}: ${chosen.name} on ${dayMonth(day)}.`, kind: "ok" });
+    if (training && !saved.id) rest.afterSet();
     if (!(await saveEntry(entry, chosen.name))) {
       setDraft({ ...saved, retryId: entry.id });
       setStatus({ text: "That didn't save, so your numbers are back in the form. Try again.", kind: "err" });
@@ -422,6 +427,7 @@ export function WorkoutForm({
         <div className={`status ${status.kind}`} role="status">
           {status.text}
         </div>
+        {training && <RestSettings />}
       </form>
 
       {custom && (

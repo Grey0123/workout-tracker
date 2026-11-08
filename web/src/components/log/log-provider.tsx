@@ -7,7 +7,7 @@ import { shiftMonth, todayKey } from "@/lib/log/dates";
 import { mealHasContent, newId } from "@/lib/log/sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile } from "@/lib/log/types";
 import type { Note } from "@/lib/coach/api";
-import type { Evaluation, Video } from "@/lib/progress/api";
+import type { Evaluation, ProgressPhoto, Video } from "@/lib/progress/api";
 import type { Weight } from "@/lib/progress/calc";
 import type { Connection, Person } from "@/lib/people/types";
 import type { Plan, Routine } from "@/lib/routines/plan";
@@ -63,6 +63,8 @@ type Log = {
   plansByDate: Map<string, Plan>;
   /** My own routines: to start on my days, or as a coach, to plan a client's. */
   routines: Routine[];
+  /** Progress photos, when it's my own log or they're shared with me. */
+  progressPhotos: ProgressPhoto[];
   /** Changes loaded data in place, for weigh-ins, evaluations and videos. */
   update: (change: (data: api.LogData) => api.LogData) => void;
   exercises: Exercise[];

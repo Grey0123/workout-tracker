@@ -153,3 +153,55 @@ export async function videoLink(path: string): Promise<string> {
   links.set(path, { url: data.signedUrl, expires: Date.now() + 3540 * 1000 });
   return data.signedUrl;
 }
+
+/* --------------------------------------------------------- progress photos */
+
+export type Pose = "front" | "side" | "back" | "other";
+export const POSES: { value: Pose; label: string }[] = [
+  { value: "front", label: "Front" },
+  { value: "side", label: "Side" },
+  { value: "back", label: "Back" },
+  { value: "other", label: "Other" },
+];
+
+export type ProgressPhoto = { id: string; date: string; pose: Pose; path: string; note: string | null; created_at: string };
+
+const PHOTO_BUCKET = "progress-photos";
+const PHOTO_COLUMNS = "id, date, pose, path, note, created_at";
+
+/** The owner's, or someone else's when they ticked Progress photos for you. */
+export const loadProgressPhotos = (userId: string) =>
+  check<ProgressPhoto[]>(createClient().from("progress_photos").select(PHOTO_COLUMNS).eq("user_id", userId).order("date").order("created_at"));
+
+/** Uploads an already resized JPEG into the owner's folder, then records it. */
+export async function addProgressPhoto(userId: string, photo: Blob, date: string, pose: Pose, note: string | null): Promise<ProgressPhoto> {
+  const db = createClient();
+  const path = `${userId}/${newId()}.jpg`;
+  const { error } = await db.storage.from(PHOTO_BUCKET).upload(path, photo, { contentType: "image/jpeg" });
+  if (error) throw new Error(error.message);
+  try {
+    return await check<ProgressPhoto>(
+      db.from("progress_photos").insert({ user_id: userId, date, pose, path, note }).select(PHOTO_COLUMNS).single(),
+    );
+  } catch (err) {
+    await db.storage.from(PHOTO_BUCKET).remove([path]);
+    throw err;
+  }
+}
+
+export async function deleteProgressPhoto(photo: ProgressPhoto) {
+  const db = createClient();
+  await check(db.from("progress_photos").delete().eq("id", photo.id));
+  await db.storage.from(PHOTO_BUCKET).remove([photo.path]);
+}
+
+const photoLinks = new Map<string, { url: string; expires: number }>();
+
+export async function progressPhotoLink(path: string): Promise<string> {
+  const known = photoLinks.get(path);
+  if (known && known.expires > Date.now()) return known.url;
+  const { data, error } = await createClient().storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+  if (error || !data) throw new Error(error?.message ?? "Couldn't load that photo.");
+  photoLinks.set(path, { url: data.signedUrl, expires: Date.now() + 3540 * 1000 });
+  return data.signedUrl;
+}

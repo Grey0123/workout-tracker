@@ -1,7 +1,15 @@
 import { createClient } from "@/lib/supabase/client";
 import { CONNECTION_COLUMNS } from "@/lib/people/api";
 import { loadNotes, type Note } from "@/lib/coach/api";
-import { loadEvaluations, loadVideos, loadWeights, type Evaluation, type Video } from "@/lib/progress/api";
+import {
+  loadEvaluations,
+  loadProgressPhotos,
+  loadVideos,
+  loadWeights,
+  type Evaluation,
+  type ProgressPhoto,
+  type Video,
+} from "@/lib/progress/api";
 import type { Weight } from "@/lib/progress/calc";
 import { loadPlans, loadRoutines } from "@/lib/routines/api";
 import type { Plan, Routine } from "@/lib/routines/plan";
@@ -63,6 +71,8 @@ export type LogData = {
   plans: Plan[];
   /** The routines of whoever is looking: your own, or a coach's to plan with. */
   routines: Routine[];
+  /** Progress photos, when it's your own log or they're shared with you. */
+  progressPhotos: ProgressPhoto[];
 };
 
 /** Your own log, or with a username, the log someone shares with you. */
@@ -98,7 +108,7 @@ export async function loadLog(username?: string): Promise<LogData> {
   const none = async () => [];
 
   const coachView = connection?.kind === "coach";
-  const [exercises, entryRows, mealRows, people, notes, coach, weights, evaluations, videos, plans, routines] = await Promise.all([
+  const [exercises, entryRows, mealRows, people, notes, coach, weights, evaluations, videos, plans, routines, progressPhotos] = await Promise.all([
     allPages<Exercise>((from, to) => db.from("exercises").select(EXERCISE_COLUMNS).order("name").range(from, to)),
     connection && !connection.share_workouts
       ? none()
@@ -132,6 +142,7 @@ export async function loadLog(username?: string): Promise<LogData> {
     connection && !connection.share_workouts ? none() : loadVideos(owner),
     connection && !connection.share_workouts ? none() : loadPlans(owner),
     connection && !coachView ? none() : loadRoutines(),
+    connection && !connection.share_progress_photos ? none() : loadProgressPhotos(owner),
   ]);
 
   const entries: Entry[] = entryRows
@@ -166,7 +177,7 @@ export async function loadLog(username?: string): Promise<LogData> {
     : [];
 
   return {
-    profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people, notes, actors, coach, weights, evaluations, videos, plans, routines,
+    profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people, notes, actors, coach, weights, evaluations, videos, plans, routines, progressPhotos,
   };
 }
 

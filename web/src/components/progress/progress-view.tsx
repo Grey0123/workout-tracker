@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { planCounts } from "@/lib/routines/plan";
+import { ProgressPhotos } from "./progress-photos";
 import { useLog } from "@/components/log/log-provider";
 import * as coach from "@/lib/coach/api";
 import { fmtSet } from "@/lib/coach/changes";
@@ -602,6 +603,8 @@ export function ProgressView() {
 
       <h2 className="section">Nutrition &amp; body</h2>
       <NutritionBody range={range} today={today} />
+
+      <ProgressPhotos range={range} />
 
       <VideosSection range={range} filter={filter} byId={byId} />
 
