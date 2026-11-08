@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { SignOutButton } from "@/components/auth-form";
-import { dateOf, longDate, niceDate, todayKey, weekOf } from "@/lib/log/dates";
+import { dateOf, dayMonth, longDate, niceDate, todayKey, weekOf } from "@/lib/log/dates";
+import { nextPlan } from "@/lib/routines/plan";
 import { entriesSets, entriesVolume, fmtVolume, plural } from "@/lib/log/sets";
 import { CoachChangeBanner, CoachCard } from "@/components/coach/coach-home";
 import { CoachPanel } from "@/components/coach/coach-panel";
@@ -49,8 +50,10 @@ function SessionCard({ day }: { day: string }) {
 }
 
 export function HomeView() {
-  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds, isOwn, connection, shares, people } = useLog();
+  const { byDate, mealsByDate, trainedDays, openDay, profile, assistedIds, isOwn, connection, shares, people, plans, plansByDate, basePath } = useLog();
   const today = todayKey();
+  const todayPlan = plansByDate.get(today);
+  const upcoming = todayPlan ?? nextPlan(plans, new Set(trainedDays), today);
   const todayRows = byDate.get(today) ?? [];
   const todayMeals = Object.keys(mealsByDate.get(today) ?? {}).length;
 
@@ -77,6 +80,19 @@ export function HomeView() {
               </span>
             )}
           </div>
+          {upcoming && (
+            <div className="top">
+              <Link
+                href={`${basePath}/calendar`}
+                className={`pill link-pill plan-pill${todayPlan && todayRows.length ? " done" : " blue"}`}
+                onClick={() => openDay(upcoming.date, "workout")}
+              >
+                {upcoming.date === today
+                  ? `${todayRows.length ? "✓ " : ""}Today's plan: ${upcoming.name}`
+                  : `Next plan: ${upcoming.name}, ${niceDate(upcoming.date, { weekday: "short" })} ${dayMonth(upcoming.date)}`}
+              </Link>
+            </div>
+          )}
           {isOwn && (
             // PRD 5.2: you always know who can see your log.
             <div className="top">
@@ -100,6 +116,9 @@ export function HomeView() {
             </Link>
             <Link href="/calendar" className="btn ghost" onClick={() => openDay(today, "food")}>
               Log meal
+            </Link>
+            <Link href="/routines" className="btn ghost">
+              Routines
             </Link>
           </div>
         )}

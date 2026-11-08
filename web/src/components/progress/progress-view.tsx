@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import { planCounts } from "@/lib/routines/plan";
 import { useLog } from "@/components/log/log-provider";
 import * as coach from "@/lib/coach/api";
 import { fmtSet } from "@/lib/coach/changes";
@@ -365,7 +366,10 @@ function VolumeSection({ entries, byId, range, today }: { entries: ReturnType<ty
 }
 
 function ConsistencySection({ entries, range, today, sessions }: { entries: ReturnType<typeof useLog>["entries"]; range: Range; today: string; sessions: number }) {
+  const { plans, trainedDays } = useLog();
   const trained = new Set(entries.map((e) => e.date));
+  // Planned days so far: one still to come isn't missed yet (PRD 5.4, "sessions planned vs done").
+  const planned = planCounts(plans, new Set(trainedDays), range.start, today < range.end ? today : range.end);
   const weeks = heatmap(trained, range, today);
   const missed = mostMissed(trained, range, today);
   const streak = clientStats([...trained].sort().reverse(), today).streak;
@@ -405,6 +409,14 @@ function ConsistencySection({ entries, range, today, sessions }: { entries: Retu
           <b>{missed ? missed.day : "—"}</b>
           <small>{missed ? `Most missed · ${missed.trained} of ${missed.weeks} wks` : "Most missed"}</small>
         </div>
+        {planned.planned > 0 && (
+          <div>
+            <b>
+              {planned.done} of {planned.planned}
+            </b>
+            <small>Planned sessions done</small>
+          </div>
+        )}
       </div>
     </section>
   );

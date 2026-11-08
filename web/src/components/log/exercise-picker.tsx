@@ -5,13 +5,16 @@ import { cleanName, recentExercises } from "@/lib/log/sets";
 import { CATEGORIES, type Exercise } from "@/lib/log/types";
 import { useLog } from "./log-provider";
 
-/** Built-ins and custom exercises of the log's owner, plus a coach's own: the ones that may be logged here. */
+/**
+ * Built-ins and custom exercises of the log's owner, plus a coach's own: the ones that may be
+ * logged here. A coach's custom exercise in one of the owner's plans counts too.
+ */
 export function usePickableExercises(): Exercise[] {
-  const { exercises, profile, me } = useLog();
-  return useMemo(
-    () => exercises.filter((e) => !e.is_custom || e.created_by === profile.id || e.created_by === me.id),
-    [exercises, profile.id, me.id],
-  );
+  const { exercises, profile, me, plans } = useLog();
+  return useMemo(() => {
+    const planned = new Set(plans.flatMap((p) => p.items.map((i) => i.exercise_id)));
+    return exercises.filter((e) => !e.is_custom || e.created_by === profile.id || e.created_by === me.id || planned.has(e.id));
+  }, [exercises, profile.id, me.id, plans]);
 }
 
 export const findByName = (list: Exercise[], name: string) => {
@@ -30,6 +33,7 @@ export function ExercisePicker({
   onQuery,
   onSelect,
   onCustom,
+  pool,
 }: {
   id: string;
   query: string;
@@ -38,9 +42,12 @@ export function ExercisePicker({
   onQuery: (text: string) => void;
   onSelect: (exercise: Exercise) => void;
   onCustom: (name: string) => void;
+  /** Offer only these, instead of everything that may be logged here. */
+  pool?: Exercise[];
 }) {
   const { entries } = useLog();
-  const pickable = usePickableExercises();
+  const loggable = usePickableExercises();
+  const pickable = pool ?? loggable;
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);

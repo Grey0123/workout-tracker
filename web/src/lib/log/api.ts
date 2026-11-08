@@ -3,6 +3,8 @@ import { CONNECTION_COLUMNS } from "@/lib/people/api";
 import { loadNotes, type Note } from "@/lib/coach/api";
 import { loadEvaluations, loadVideos, loadWeights, type Evaluation, type Video } from "@/lib/progress/api";
 import type { Weight } from "@/lib/progress/calc";
+import { loadPlans, loadRoutines } from "@/lib/routines/api";
+import type { Plan, Routine } from "@/lib/routines/plan";
 import type { CoachAccess, Connection, Person } from "@/lib/people/types";
 import { newId } from "./sets";
 import type { Entry, Exercise, Meal, MealSlot, Profile, SetValues } from "./types";
@@ -57,6 +59,10 @@ export type LogData = {
   evaluations: Evaluation[];
   /** Form videos, wherever workouts are shared. */
   videos: Video[];
+  /** Routines put on this person's days, wherever workouts are shared. */
+  plans: Plan[];
+  /** The routines of whoever is looking: your own, or a coach's to plan with. */
+  routines: Routine[];
 };
 
 /** Your own log, or with a username, the log someone shares with you. */
@@ -92,7 +98,7 @@ export async function loadLog(username?: string): Promise<LogData> {
   const none = async () => [];
 
   const coachView = connection?.kind === "coach";
-  const [exercises, entryRows, mealRows, people, notes, coach, weights, evaluations, videos] = await Promise.all([
+  const [exercises, entryRows, mealRows, people, notes, coach, weights, evaluations, videos, plans, routines] = await Promise.all([
     allPages<Exercise>((from, to) => db.from("exercises").select(EXERCISE_COLUMNS).order("name").range(from, to)),
     connection && !connection.share_workouts
       ? none()
@@ -124,6 +130,8 @@ export async function loadLog(username?: string): Promise<LogData> {
     connection && !connection.share_bodyweight ? none() : loadWeights(owner),
     connection && !coachView ? none() : loadEvaluations(owner),
     connection && !connection.share_workouts ? none() : loadVideos(owner),
+    connection && !connection.share_workouts ? none() : loadPlans(owner),
+    connection && !coachView ? none() : loadRoutines(),
   ]);
 
   const entries: Entry[] = entryRows
@@ -150,13 +158,16 @@ export async function loadLog(username?: string): Promise<LogData> {
   for (const row of [...entries, ...mealRows]) for (const id of [row.created_by, row.updated_by]) if (id) named.add(id);
   for (const n of notes) named.add(n.coach_id);
   for (const e of evaluations) named.add(e.coach_id);
+  for (const p of plans) if (p.assigned_by) named.add(p.assigned_by);
   named.delete(owner);
   named.delete(user.id);
   const actors = named.size
     ? (((await db.from("profiles").select(PROFILE_COLUMNS).in("id", [...named])).data ?? []) as Person[])
     : [];
 
-  return { profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people, notes, actors, coach, weights, evaluations, videos };
+  return {
+    profile, me: me as Profile, connection, exercises, entries, meals: mealRows, people, notes, actors, coach, weights, evaluations, videos, plans, routines,
+  };
 }
 
 async function myCoach(me: string): Promise<LogData["coach"]> {

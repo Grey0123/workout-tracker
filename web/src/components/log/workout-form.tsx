@@ -14,7 +14,8 @@ import {
   variantSuggestions,
   type DraftRow,
 } from "@/lib/log/sets";
-import { COMMON_VARIANTS, METRICS, type Entry, type Exercise, type ExerciseKind, type Metric, type Side } from "@/lib/log/types";
+import { COMMON_VARIANTS, METRICS, type Entry, type Exercise, type ExerciseKind, type Metric, type SetValues, type Side } from "@/lib/log/types";
+import type { RoutineItem } from "@/lib/routines/plan";
 import { CustomExerciseForm } from "./custom-exercise-form";
 import { ExercisePicker, findByName, usePickableExercises } from "./exercise-picker";
 import { useLog } from "./log-provider";
@@ -64,6 +65,21 @@ function draftOf(entry: Entry, exercise: Exercise | undefined): Draft {
   };
 }
 
+/** A planned exercise to log: the form opens with it and its pre-filled sets. */
+export type PlanStart = { item: RoutineItem; sets: SetValues[] };
+
+function draftOfPlan({ item, sets }: PlanStart, exercise: Exercise | undefined): Draft {
+  const kind = exercise?.kind ?? "weighted";
+  return {
+    ...blankDraft(),
+    exerciseId: item.exercise_id,
+    query: exercise?.name ?? "",
+    variant: item.variant ?? "",
+    tempo: item.target_tempo ?? "",
+    rows: sets.length ? sets.map((set) => setToRow(set, kind, newId())) : blankRows(exercise?.per_side),
+  };
+}
+
 /** Picking another exercise keeps what's typed, in the shape the new one logs. */
 function fitRows(rows: DraftRow[], perSide: boolean): DraftRow[] {
   const sided = rows.some((r) => r.side);
@@ -105,11 +121,23 @@ const ARIA: Record<Metric, string> = {
 
 const TEMPO_HELP = "Four numbers in seconds: lowering, pause at the bottom, lifting, pause at the top. X means as fast as possible.";
 
-export function WorkoutForm({ day, editing, onDone }: { day: string; editing: Entry | null; onDone: () => void }) {
-  const { exercises, entries, saveEntry, me } = useLog();
+export function WorkoutForm({
+  day,
+  editing,
+  start = null,
+  onDone,
+}: {
+  day: string;
+  editing: Entry | null;
+  start?: PlanStart | null;
+  /** Called when the form is cleared: with the exercise just saved, or nothing on cancel. */
+  onDone: (savedExerciseId?: string) => void;
+}) {
+  const { exercises, entries, saveEntry, me, profile, plansByDate, actorLabel } = useLog();
   const pickable = usePickableExercises();
   const [draft, setDraft] = useState(blankDraft);
   const [loaded, setLoaded] = useState<Entry | null>(null);
+  const [loadedStart, setLoadedStart] = useState<PlanStart | null>(null);
   const [status, setStatus] = useState<{ text: string; kind: "ok" | "err" | "" }>({ text: "", kind: "" });
   const [invalidExercise, setInvalidExercise] = useState(false);
   const [custom, setCustom] = useState<{ name: string; exercise?: Exercise } | null>(null);
@@ -124,6 +152,20 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
       setInvalidExercise(false);
     }
   }
+  if (start !== loadedStart) {
+    setLoadedStart(start);
+    if (start) {
+      setDraft(draftOfPlan(start, exercises.find((e) => e.id === start.item.exercise_id)));
+      setStatus({ text: "", kind: "" });
+      setInvalidExercise(false);
+    }
+  }
+
+  // The day's plan can prescribe a tempo for an exercise (PRD 5.3).
+  const plan = plansByDate.get(day);
+  const plannedFor = (exerciseId: string | null) => plan?.items.find((i) => i.exercise_id === exerciseId);
+  const planned = plannedFor(draft.exerciseId);
+  const tempoBy = !plan?.assigned_by || plan.assigned_by === profile.id ? null : actorLabel(plan.assigned_by);
 
   const exercise = exercises.find((e) => e.id === draft.exerciseId);
   const kind: ExerciseKind = exercise?.kind ?? "weighted";
@@ -135,13 +177,22 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
   // Anything typed stays visible, so a value from before switching exercise can't save unseen.
   const typed = METRICS.filter((m) => draft.rows.some((r) => r.values[m]?.trim()));
   const columns = METRICS.filter((m) => columnsFor(exercise).includes(m) || typed.includes(m));
-  const showTempo = exercise ? exercise.inputs.includes("tempo") || !!draft.tempo || draft.perSetTempo : false;
+  const showTempo = exercise ? exercise.inputs.includes("tempo") || !!draft.tempo || draft.perSetTempo || !!planned?.target_tempo : false;
   const labels = setLabels(draft.rows);
   const pairOf = (i: number) => labels[i].replace(/ [LR]$/, "");
 
   const pick = (next: Exercise) => {
     setInvalidExercise(false);
-    setDraft((d) => ({ ...d, exerciseId: next.id, query: next.name, rows: fitRows(d.rows, next.per_side) }));
+    const item = plannedFor(next.id);
+    setDraft((d) => ({
+      ...d,
+      exerciseId: next.id,
+      query: next.name,
+      rows: fitRows(d.rows, next.per_side),
+      // A new entry for a planned exercise takes the plan's tempo and variant.
+      tempo: !d.id && !d.tempo && item?.target_tempo ? item.target_tempo : d.tempo,
+      variant: !d.id && !d.variant && item?.variant ? item.variant : d.variant,
+    }));
   };
 
   const cancel = () => {
@@ -210,7 +261,7 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
     const verb = draft.id ? "Updated" : "Saved";
     // Shown straight away. If the database says no, the typed values come back.
     setDraft(blankDraft());
-    onDone();
+    onDone(draft.id ? undefined : chosen.id);
     setStatus({ text: `${verb}: ${chosen.name} on ${dayMonth(day)}.`, kind: "ok" });
     if (!(await saveEntry(entry, chosen.name))) {
       setDraft({ ...saved, retryId: entry.id });
@@ -284,6 +335,11 @@ export function WorkoutForm({ day, editing, onDone }: { day: string; editing: En
               aria-describedby="f-tempo-help"
               onChange={(e) => update({ tempo: e.target.value })}
             />
+            {planned?.target_tempo && (
+              <div className="set-by" id="f-tempo-plan">
+                {tempoBy === "You" ? "You set" : tempoBy ? `Set by ${tempoBy}:` : "Your routine says"} {planned.target_tempo}
+              </div>
+            )}
             <div className="sb-hint" id="f-tempo-help">
               {TEMPO_HELP}
             </div>

@@ -5,12 +5,14 @@ import { useEffect, useState } from "react";
 import { useLog } from "@/components/log/log-provider";
 import * as coach from "@/lib/coach/api";
 import { describeGroup, sentence, type Change } from "@/lib/coach/changes";
+import { dayMonth, niceDate } from "@/lib/log/dates";
 import type { Person } from "@/lib/people/types";
 import { createClient } from "@/lib/supabase/client";
 import { when } from "./history-dialog";
 import { useChangeContext } from "./use-change-context";
 
 type Item = { key: string; unread: boolean; at: string; text: string; details: string[]; href: string | null; day: string | null };
+
 
 const NOTE_WORDS: Record<string, string> = {
   reminder: "a reminder",
@@ -77,7 +79,7 @@ export function NotificationsView() {
       continue;
     }
     const who = name(n.actor_id);
-    const base = { key: n.id, unread: !n.read_at, at: n.created_at, details: [] as string[], day: null };
+    const base: Omit<Item, "text" | "href"> = { key: n.id, unread: !n.read_at, at: n.created_at, details: [], day: null };
     const p = n.payload;
     if (n.type === "connection_request") items.push({ ...base, text: `${who} sent you a request`, href: "/people" });
     else if (n.type === "connection_accepted") items.push({ ...base, text: `${who} accepted your request`, href: "/people" });
@@ -91,6 +93,13 @@ export function NotificationsView() {
       const note = notes.find((x) => x.id === p.row_id);
       items.push({ ...base, text: `${who} sent you ${note ? NOTE_WORDS[note.kind] ?? "a note" : "a note"}`, details: note ? [note.body] : [], href: "/" });
     } else if (n.type === "evaluation") items.push({ ...base, text: `${who} wrote you an evaluation`, href: "/progress" });
+    else if (n.type === "plan_added") {
+      const date = String(p.date);
+      items.push({ ...base, text: `${who} planned ${String(p.name)} for you on ${niceDate(date, { weekday: "short" })} ${dayMonth(date)}`, href: "/calendar", day: date });
+    } else if (n.type === "plan_removed") {
+      const date = String(p.date);
+      items.push({ ...base, text: `${who} removed ${String(p.name)} from ${niceDate(date, { weekday: "short" })} ${dayMonth(date)}`, href: "/calendar", day: date });
+    }
   }
   for (const item of items) {
     const group = changes.get(item.key);

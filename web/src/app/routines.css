@@ -1,0 +1,369 @@
+/* Routines and plans (M7). Same tokens and shapes as log.css. */
+
+/* ---------------------------------------------------------- calendar marks */
+.day.planned {
+  border-style: dashed;
+  border-color: var(--blue-hi);
+}
+.cal-legend .key.planned {
+  background: transparent;
+  border: 1.5px dashed var(--blue-hi);
+}
+
+/* --------------------------------------------------------------- plan card */
+.plan-card {
+  margin: 12px 13px 0;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.plan-card.status-done {
+  border-left-color: var(--green-ink);
+}
+.plan-card.status-skipped,
+.plan-card.status-missed {
+  border-left-color: var(--muted-2);
+}
+.plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.plan-head .link-btn {
+  margin-top: 0;
+}
+.plan-name {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+  line-height: 1.15;
+}
+.plan-status {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: #0b57d9;
+}
+.status-done .plan-status {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.status-skipped .plan-status,
+.status-missed .plan-status {
+  background: var(--line-soft);
+  color: var(--muted);
+}
+.plan-notes {
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--ink);
+  white-space: pre-line;
+}
+.plan-items {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plan-items li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 9px;
+}
+.plan-items li.active {
+  background: var(--blue-soft);
+}
+.plan-items.compact li {
+  padding: 5px 0;
+}
+.pi-n {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--line-soft);
+  color: var(--muted);
+}
+.plan-items li.logged .pi-n {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.pi-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pi-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+.plan-items li.logged .pi-name {
+  color: var(--muted);
+}
+.pi-variant {
+  font-weight: 400;
+  color: var(--muted);
+}
+.pi-target {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pi-note {
+  font-size: 12.5px;
+  color: var(--amber-ink);
+}
+.pi-done {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-ink);
+}
+.plan-items .btn.sm {
+  flex: 0 0 auto;
+  min-width: 64px;
+}
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+}
+.link-btn.danger {
+  color: var(--red);
+}
+.link-btn:disabled {
+  opacity: 0.5;
+}
+
+/* Prescribed tempo in the workout form. */
+.set-by {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------- starting a routine */
+.start-routine {
+  margin: 12px 13px 0;
+}
+.routine-menu {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.routine-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.routine-menu li button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 10px;
+  min-height: 44px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+}
+.routine-menu li button:hover {
+  background: var(--blue-soft);
+}
+.routine-menu li button span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.routine-menu > .link-btn,
+.routine-menu > .cx-hint {
+  display: inline-block;
+  padding: 4px 10px;
+}
+.save-day {
+  margin: 4px 13px 0;
+}
+.save-day-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 13px 0;
+}
+.save-day-form input {
+  flex: 1 1 200px;
+}
+.save-day-form .cx-hint {
+  flex-basis: 100%;
+}
+
+/* --------------------------------------------------------- routines page */
+.page-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.page-top .page-heading {
+  margin-bottom: 0;
+}
+.page-intro {
+  margin: 6px 0 14px;
+  font-size: 13.5px;
+  color: var(--muted);
+  max-width: 60ch;
+}
+.routine-list {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 900px) {
+  .routine-list {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+.routine-card {
+  padding: 14px 15px;
+}
+.routine-card > .cx-hint {
+  margin-top: 8px;
+}
+.plan-day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.plan-day input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.routine-editor {
+  padding: 14px 15px;
+  margin-bottom: 14px;
+}
+.routine-items {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.routine-item {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.ri-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ri-picker {
+  flex: 1;
+  min-width: 0;
+}
+.ri-tools {
+  display: flex;
+  gap: 2px;
+}
+.ri-tools button {
+  width: 34px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+}
+.ri-tools button:disabled {
+  opacity: 0.35;
+}
+.ri-targets {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.6fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.log-app .ri-targets label {
+  margin: 0;
+  min-width: 0;
+}
+.ri-targets label span {
+  display: block;
+  margin-bottom: 4px;
+}
+.log-app .ri-targets input,
+.log-app .ri-note {
+  padding: 9px 10px;
+  background: var(--surface);
+  /* Inside a label, which is styled as a small caps heading. */
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.log-app .ri-note {
+  margin-top: 8px;
+}
+@media (max-width: 520px) {
+  .ri-targets {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ri-targets label:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ------------------------------------------------------------------ home */
+.plan-pill {
+  text-decoration: none;
+}
+
+/* Progress: a fourth stat, planned sessions done, when the period has plans. */
+.client-stats:has(> div:nth-child(4)) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 520px) {
+  .client-stats:has(> div:nth-child(4)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./log.css" layer(components);
 @import "./progress.css" layer(components);
+@import "./routines.css" layer(components);
 
 /* v1's palette, carried over from its styles.css. The darker text and stripe
    colours come from the v2 mockups, where v1's tones fail contrast at small sizes. */

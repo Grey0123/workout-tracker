@@ -9,7 +9,8 @@ import * as coach from "@/lib/coach/api";
 import { Activities } from "./activities";
 import { useLog } from "./log-provider";
 import { MealForm, MealsList } from "./meals";
-import { WorkoutForm } from "./workout-form";
+import { WorkoutForm, type PlanStart } from "./workout-form";
+import { nextStart, PlanCard, SaveDayAsRoutine } from "@/components/routines/plan-card";
 
 /** The coach's plan for the week holding the selected day (design: pinned on the calendar). */
 function PlanBanner() {
@@ -27,7 +28,7 @@ function PlanBanner() {
 }
 
 function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
-  const { byDate, mealsByDate, selectedDay, month, showMonth, showToday, profile, entries, meals: allMeals, isOwn } = useLog();
+  const { byDate, mealsByDate, plansByDate, selectedDay, month, showMonth, showToday, profile, entries, meals: allMeals, isOwn } = useLog();
   const today = todayKey();
   // Days someone other than the owner added to or changed (design: a dot on the day).
   const touched = new Set(
@@ -65,10 +66,13 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
           if (day === today) classes.push("today");
           if (day === selectedDay) classes.push("selected");
           if (rows.length) classes.push("trained");
+          const plan = plansByDate.get(day);
+          if (plan && !rows.length && !plan.skipped_at) classes.push("planned");
 
           const bits: string[] = [];
           if (rows.length) bits.push(plural(rows.length, "exercise"));
           if (meals) bits.push(plural(meals, "meal"));
+          if (plan) bits.push(`${plan.name} planned`);
 
           return (
             <button
@@ -102,6 +106,12 @@ function MonthGrid({ onPick }: { onPick: (day: string) => void }) {
           <span className="key food" />
           meals logged
         </span>
+        {plansByDate.size > 0 && (
+          <span>
+            <span className="key planned" />
+            planned
+          </span>
+        )}
         {touched.size > 0 && (
           <span>
             <span className="key dot" />
@@ -136,6 +146,8 @@ export function CalendarView() {
   const [history, setHistory] = useState<HistoryTarget | null>(null);
   const dayNotes = notes.filter((n) => n.kind === "day" && n.date === selectedDay);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [start, setStart] = useState<PlanStart | null>(null);
+  const log = useLog();
   const [slot, setSlot] = useState<MealSlot>("morning");
   const [mealVersion, setMealVersion] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
@@ -157,11 +169,13 @@ export function CalendarView() {
     selectDay(day);
     // An edit in progress doesn't carry across days.
     setEditing(null);
+    setStart(null);
     panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const edit = (entry: Entry) => {
     setEditing(entry);
+    setStart(null);
     form.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -205,6 +219,17 @@ export function CalendarView() {
 
         {pane === "workout" ? (
           <div role="tabpanel">
+            {shares.workouts && (
+              <PlanCard
+                day={selectedDay}
+                active={start?.item.exercise_id ?? null}
+                onLog={(next) => {
+                  setEditing(null);
+                  setStart(next);
+                  form.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              />
+            )}
             {shares.workouts ? (
               <div className="entries">
                 <Activities
@@ -217,9 +242,21 @@ export function CalendarView() {
             ) : (
               <div className="no-entries">{profile.display_name} isn&apos;t sharing workouts with you.</div>
             )}
+            {shares.workouts && <SaveDayAsRoutine day={selectedDay} />}
             {can.workouts && (
               <div ref={form}>
-                <WorkoutForm key={selectedDay} day={selectedDay} editing={editing} onDone={() => setEditing(null)} />
+                <WorkoutForm
+                  key={selectedDay}
+                  day={selectedDay}
+                  editing={editing}
+                  start={start}
+                  onDone={(saved) => {
+                    setEditing(null);
+                    // Logging a planned exercise moves on to the next one, so a plan is a few confirms.
+                    const plan = log.plansByDate.get(selectedDay);
+                    setStart(saved && start && plan ? nextStart(plan, log, saved) : null);
+                  }}
+                />
               </div>
             )}
           </div>

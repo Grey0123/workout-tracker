@@ -10,6 +10,7 @@ import type { Note } from "@/lib/coach/api";
 import type { Evaluation, Video } from "@/lib/progress/api";
 import type { Weight } from "@/lib/progress/calc";
 import type { Connection, Person } from "@/lib/people/types";
+import type { Plan, Routine } from "@/lib/routines/plan";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { SetupNotice } from "@/components/setup-notice";
 
@@ -57,6 +58,11 @@ type Log = {
   weights: Weight[];
   evaluations: Evaluation[];
   videos: Video[];
+  /** Routines put on days of this log, and the one on each day. */
+  plans: Plan[];
+  plansByDate: Map<string, Plan>;
+  /** My own routines: to start on my days, or as a coach, to plan a client's. */
+  routines: Routine[];
   /** Changes loaded data in place, for weigh-ins, evaluations and videos. */
   update: (change: (data: api.LogData) => api.LogData) => void;
   exercises: Exercise[];
@@ -357,6 +363,7 @@ export function LogProvider({ username, children }: { username?: string; childre
       shares: { workouts: !c || c.share_workouts, meals: !c || c.share_meals, mealPhotos: !c || c.share_meal_photos },
       byDate,
       mealsByDate,
+      plansByDate: new Map(data.plans.map((p) => [p.date, p])),
       trainedDays: [...byDate.keys()].sort(),
       assistedIds: new Set(data.exercises.filter((e) => e.assisted).map((e) => e.id)),
       selectedDay,

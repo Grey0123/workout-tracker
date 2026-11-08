@@ -50,7 +50,13 @@ export function ClientsView() {
 
   return (
     <>
-      <h1 className="section page-heading">Your clients</h1>
+      <div className="page-top">
+        <h1 className="section page-heading">Your clients</h1>
+        <Link href="/routines" className="btn ghost sm">
+          Your routines
+        </Link>
+      </div>
+      <p className="page-intro">To plan a routine for a client, open their calendar and pick a day.</p>
       <div className="people-list">
         {rows.map(({ c, s }) => (
           <Link key={c.connectionId} href={`/u/${c.person.username}`} className="card client-card">
