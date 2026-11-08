@@ -16,6 +16,8 @@ const barlow = Barlow_Condensed({
 export const metadata: Metadata = {
   title: "WorkoutTracker",
   description: "Log your training and meals, and share them with your coach or friends.",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "WorkoutTracker", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

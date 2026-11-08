@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WorkoutTracker</string>
+    <string name="title_activity_main">WorkoutTracker</string>
+    <string name="package_name">app.workouttracker.mobile</string>
+    <string name="custom_url_scheme">app.workouttracker.mobile</string>
+</resources>

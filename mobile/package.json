@@ -1,0 +1,20 @@
+{
+  "name": "workouttracker-mobile",
+  "private": true,
+  "description": "The Android app: a WebView of the website (PRD 7). See README.md.",
+  "scripts": {
+    "sync": "cap sync android",
+    "build": "cap sync android && cd android && gradlew.bat assembleDebug",
+    "assets": "capacitor-assets generate --android --iconBackgroundColor #0B1B33 --splashBackgroundColor #0B1B33"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "4.0.0",
+    "@capacitor/cli": "8.6.0",
+    "typescript": "5.9.3"
+  }
+}

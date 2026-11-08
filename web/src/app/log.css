@@ -1647,6 +1647,12 @@
 }
 
 /* very narrow phones */
+/* Most Android phones are 360 px wide, and two stat cards still fit there. */
+@media (max-width: 330px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 360px) {
   .brand-name {
     font-size: 21px;
@@ -1654,9 +1660,6 @@
   .site-head nav a {
     font-size: 12.5px;
     letter-spacing: 0.03em;
-  }
-  .stats {
-    grid-template-columns: 1fr;
   }
   .day {
     min-height: 66px;
